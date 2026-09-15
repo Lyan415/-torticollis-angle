@@ -61,16 +61,16 @@ header p{margin:2px 0 0;color:var(--muted);font-size:.875rem}
 .notice strong{display:block}
 
 /* result readout: the one bold element */
-.readout{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:center}
-.angle{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;font-variant-numeric:tabular-nums}
+.readout{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+.angle{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .angle .label{font-size:1.3rem;font-weight:600;white-space:nowrap}
-.angle .num{font-size:3.4rem;line-height:1;font-weight:300;letter-spacing:-.02em}
+.angle .num{font-size:3rem;line-height:1;font-weight:300;letter-spacing:-.02em}
 .angle .num small{font-size:1.4rem;font-weight:400;margin-left:2px}
 .angle.side-left .label,.angle.side-left .num{color:var(--tilt)}
 .angle.side-right .label,.angle.side-right .num{color:var(--tilt)}
 .angle.side-center .label,.angle.side-center .num{color:var(--good)}
-.readout svg{width:110px;height:68px;justify-self:end}
-.side{grid-column:1/-1;font-size:.9rem;color:var(--muted)}
+.readout svg{width:96px;height:60px;margin-left:auto;flex:none}
+.side{flex-basis:100%;font-size:.9rem;color:var(--muted)}
 
 .edit-bar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.85rem;min-height:36px;display:inline-flex;align-items:center;gap:6px}
@@ -328,7 +328,7 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
 
 <script type="module">
 /* ======================= 設定 ======================= */
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 const CONFIG = {
   mpVersion: '1.0.1',
   wasmBase: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
@@ -726,8 +726,9 @@ function drawScene(ctx,k,u,opt={}){
     const top=add(E,mul(sub(E,X),.3));
     strokeLine(ctx,top,X,COLORS.mid,lw);
     // 垂直參考線（與雙肩連線垂直，通過交點；虛線，僅供比對）
-    const refLen=Math.max(len(sub(E,X))*.6,u*24);
-    strokeLine(ctx,sub(X,mul(r.n,refLen*.28)),add(X,mul(r.n,refLen)),'rgba(233,238,235,.65)',lw*.55,[u*1.5,u*1.8]);
+    const dEX=len(sub(E,X));
+    const refLen=Math.max(dEX*1.45,u*30);
+    strokeLine(ctx,sub(X,mul(r.n,refLen*.35)),add(X,mul(r.n,refLen)),'rgba(240,244,242,.8)',lw*.6,[u*1.6,u*1.6]);
     // 夾角弧：垂直參考線 → 中線，數值＝與垂直線的偏差角
     const dm=norm(sub(E,X));
     const R=Math.min(len(sub(E,X))*.35,u*22);
@@ -740,8 +741,19 @@ function drawScene(ctx,k,u,opt={}){
     ctx.beginPath(); ctx.arc(X.x,X.y,R,aS,aS+diff,diff<0);
     ctx.strokeStyle=arcColor.trim(); ctx.lineWidth=lw*.9; ctx.stroke();
     ctx.restore();
-    const bis=aS+diff/2;
-    if (opt.labels!==false) tagText(ctx,`${Math.abs(r.delta).toFixed(1)}°`,X.x+Math.cos(bis)*R*1.7,X.y+Math.sin(bis)*R*1.7,u*7,'#fff');
+    if (opt.labels!==false){
+      const fsz=u*7;
+      const bis=aS+diff/2;
+      const dist=Math.max(dEX*1.3,refLen)+fsz*1.2;
+      let lx=X.x+Math.cos(bis)*dist, ly=X.y+Math.sin(bis)*dist;
+      const bd=opt.bounds;
+      if (bd){
+        const mx=fsz*2.2, my=fsz*1.1;
+        lx=Math.min(Math.max(lx,bd.x+mx),bd.x+bd.w-mx);
+        ly=Math.min(Math.max(ly,bd.y+my),bd.y+bd.h-my);
+      }
+      tagText(ctx,`${Math.abs(r.delta).toFixed(1)}°`,lx,ly,fsz,'#fff');
+    }
     // 交點
     ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=u*.6;
     ctx.beginPath(); ctx.arc(X.x,X.y,u*1.8,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -775,7 +787,7 @@ function render(){
   vctx.setTransform(dpr,0,0,dpr,ox*dpr,oy*dpr);
   vctx.drawImage(S.src,0,0,S.src.width*k,S.src.height*k);
   if (S.pts){
-    drawScene(vctx,k,2,{selected:S.selected,labels:true});
+    drawScene(vctx,k,2,{selected:S.selected,labels:true,bounds:{x:-ox,y:-oy,w:S.view.cw,h:S.view.ch}});
   }
   if (S.drag){
     vctx.setTransform(dpr,0,0,dpr,0,0);
@@ -794,7 +806,7 @@ function drawLoupe(){
   vctx.drawImage(S.src,q.x-srcR,q.y-srcR,srcR*2,srcR*2,cx-R,cy-R,R*2,R*2);
   // 在放大鏡中畫其他點與線的局部
   vctx.translate(cx-q.x*k*zoom,cy-q.y*k*zoom);
-  drawScene(vctx,k*zoom,2,{selected:key});
+  drawScene(vctx,k*zoom,2,{selected:key,labels:false});
   vctx.restore();
   vctx.save();
   vctx.strokeStyle='#fff'; vctx.lineWidth=2;
@@ -1041,19 +1053,25 @@ function buildExport(info){
   const c=document.createElement('canvas'); c.width=W; c.height=IH+PH;
   const x=c.getContext('2d');
   x.drawImage(S.src,crop.x,crop.y,crop.w,crop.h,0,0,W,IH);
-  drawScene(x,outK,u,{labels:true,origin:{x:crop.x,y:crop.y}});
+  drawScene(x,outK,u,{labels:true,origin:{x:crop.x,y:crop.y},bounds:{x:0,y:0,w:W,h:IH}});
 
   // 資訊區
   x.fillStyle='#FFFFFF'; x.fillRect(0,IH,W,PH);
   const accentColor=r.side==='center'?'#1F8A5F':'#D6455A';
   x.fillStyle=accentColor; x.fillRect(0,IH,W,Math.max(4,fs*.2));
   let y=IH+padX*.9;
+  const midY=y+headH*.46;
+  const drawCentered=(text,font,xPos)=>{
+    x.font=font; x.textBaseline='alphabetic';
+    const mm=x.measureText(text);
+    const asc=mm.actualBoundingBoxAscent||0, desc=mm.actualBoundingBoxDescent||0;
+    x.fillText(text,xPos,midY+(asc-desc)/2);
+    return mm.width;
+  };
+  x.fillStyle=accentColor;
+  const lw=drawCentered(SIDE_LABEL[r.side],`600 ${fs*1.05}px ${fam}`,padX);
+  drawCentered(`${Math.abs(r.delta).toFixed(1)}°`,`300 ${fs*2.1}px ${fam}`,padX+lw+fs*.5);
   x.textBaseline='top';
-  x.font=`600 ${fs*1.05}px ${fam}`; x.fillStyle=accentColor;
-  x.fillText(SIDE_LABEL[r.side],padX,y+fs*.35);
-  const lw=x.measureText(SIDE_LABEL[r.side]).width;
-  x.font=`300 ${fs*2.1}px ${fam}`;
-  x.fillText(`${Math.abs(r.delta).toFixed(1)}°`,padX+lw+fs*.5,y);
   y+=headH;
 
   rows.forEach(([l],i)=>{
