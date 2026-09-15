@@ -11,6 +11,7 @@
   --accent:#1F6F63; --accent-ink:#FFFFFF; --accent-soft:#DDEBE7;
   --shoulder:#FFB020; --mid:#22C3E6; --arc:#FF4F8B;
   --warn:#8A4B00; --warn-bg:#FFF1DC; --err:#A3231B; --err-bg:#FDE7E5;
+  --tilt:#D6455A; --good:#1F8A5F;
   --font:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
@@ -41,10 +42,13 @@ header p{margin:2px 0 0;color:var(--muted);font-size:.875rem}
 .row{display:flex;flex-wrap:wrap;gap:8px}
 .row.stack > .btn{flex:1 1 200px}
 
-.stage{position:relative;background:#26302F;border-radius:14px;overflow:hidden;display:flex;justify-content:center}
-#view{display:block;touch-action:auto;max-width:100%}
-.stage.editing #view{touch-action:none}
-.busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,28,27,.72);color:#fff;text-align:center;padding:24px}
+.stage{position:relative;background:#26302F;border-radius:14px;overflow:hidden;display:flex;justify-content:center;touch-action:none}
+#view{display:block;touch-action:none;max-width:100%}
+.stage-tools{position:absolute;right:8px;bottom:8px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.stage-tools button{width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(20,28,27,.72);color:#fff;font-size:1.1rem;line-height:1;display:flex;align-items:center;justify-content:center}
+.stage-tools button:active{background:rgba(20,28,27,.9)}
+.zoom-badge{position:absolute;left:8px;bottom:8px;background:rgba(20,28,27,.72);color:#fff;font-size:.72rem;padding:3px 8px;border-radius:999px;z-index:2}
+.busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,28,27,.72);color:#fff;text-align:center;padding:24px;z-index:3}
 .busy.show{display:flex}
 .spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;margin:0 auto 10px;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -58,11 +62,15 @@ header p{margin:2px 0 0;color:var(--muted);font-size:.875rem}
 
 /* result readout: the one bold element */
 .readout{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:center}
-.angle{font-size:4rem;line-height:1;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
-.angle small{font-size:1.6rem;font-weight:400;margin-left:2px}
-.readout svg{width:120px;height:74px;justify-self:end}
-.side{grid-column:1/-1;font-size:1rem}
-.side b{font-weight:600}
+.angle{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;font-variant-numeric:tabular-nums}
+.angle .label{font-size:1.3rem;font-weight:600;white-space:nowrap}
+.angle .num{font-size:3.4rem;line-height:1;font-weight:300;letter-spacing:-.02em}
+.angle .num small{font-size:1.4rem;font-weight:400;margin-left:2px}
+.angle.side-left .label,.angle.side-left .num{color:var(--tilt)}
+.angle.side-right .label,.angle.side-right .num{color:var(--tilt)}
+.angle.side-center .label,.angle.side-center .num{color:var(--good)}
+.readout svg{width:110px;height:68px;justify-self:end}
+.side{grid-column:1/-1;font-size:.9rem;color:var(--muted)}
 
 .edit-bar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
 .chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.85rem;min-height:36px;display:inline-flex;align-items:center;gap:6px}
@@ -93,6 +101,11 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
 .form-err{color:var(--err);font-size:.85rem;min-height:1.2em}
 .dlg .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:14px}
 #previewImg{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.crop-wrap{background:#26302F;border-radius:10px;overflow:hidden;position:relative;margin:0 auto;touch-action:none}
+#cropView{display:block;touch-action:none;width:100%;height:100%}
+.crop-controls{display:flex;align-items:center;gap:10px;margin-top:8px}
+.crop-controls input[type=range]{flex:1}
+.crop-controls button{min-height:38px;padding:6px 12px}
 
 /* camera */
 .cam{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column}
@@ -144,8 +157,15 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
 
     <div class="stage" id="stage">
       <canvas id="view" aria-label="照片與量測線"></canvas>
+      <div class="stage-tools">
+        <button type="button" id="zoomIn" aria-label="放大">＋</button>
+        <button type="button" id="zoomOut" aria-label="縮小">－</button>
+        <button type="button" id="zoomReset" aria-label="重置檢視" style="font-size:.85rem">⟲</button>
+      </div>
+      <div class="zoom-badge" id="zoomBadge">100%</div>
       <div class="busy" id="busy" role="status" aria-live="polite"><div><div class="spinner"></div><div id="busyText">處理中</div></div></div>
     </div>
+    <p class="muted" style="margin:6px 2px 0">可用手指縮放、拖曳檢視照片與點位（不影響量測），方便確認位置是否正確。</p>
 
     <div class="panel" id="editPanel" style="margin-top:14px">
       <div class="row" style="justify-content:space-between;align-items:center">
@@ -175,11 +195,11 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
 
     <div class="panel" id="resultPanel">
       <div class="readout">
-        <div class="angle" id="angleText">--<small>°</small></div>
+        <div class="angle" id="angleBox"><span class="label" id="sideLabel">—</span><span class="num" id="angleText">--<small>°</small></span></div>
         <svg id="protractor" viewBox="0 0 120 74" aria-hidden="true"></svg>
-        <div class="side" id="sideText">—</div>
+        <div class="side" id="sideText">與垂直參考線的偏差角度</div>
       </div>
-      <p class="muted" style="margin:8px 0 0">夾角為雙肩連線與頭部中線（兩眼中點—頸點）所夾、小於 90° 的一側。左右以孩童本人為準。</p>
+      <p class="muted" style="margin:8px 0 0">0° 表示頭部與雙肩連線垂直（正常）；數值愈大代表頭部愈偏向該側。此角度不受手機拍攝時左右歪斜影響。</p>
       <div class="row stack" style="margin-top:14px">
         <button class="btn primary" id="btnExport" type="button">匯出圖片</button>
         <button class="btn" id="btnRestart" type="button">換一張照片</button>
@@ -270,6 +290,16 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
   <div class="dlg">
     <h2>匯出圖片</h2>
     <p class="muted" style="margin-top:0">姓名與出生日期可略過。資料只寫入匯出的圖片，不會保存。</p>
+    <div class="field">
+      <span>調整照片範圍（拖曳移動、雙指或滾輪縮放；不會變形）</span>
+      <div class="crop-wrap" id="cropWrap"><canvas id="cropView"></canvas></div>
+      <div class="crop-controls">
+        <button type="button" id="cropOut" aria-label="縮小">－</button>
+        <input type="range" id="cropZoom" min="100" max="400" step="1" value="100" aria-label="照片縮放">
+        <button type="button" id="cropIn" aria-label="放大">＋</button>
+        <button type="button" id="cropReset">重置</button>
+      </div>
+    </div>
     <label class="field"><span>姓名</span><input id="inName" type="text" autocomplete="off" maxlength="40"></label>
     <label class="field"><span>出生日期</span><input id="inBirth" type="date"></label>
     <label class="field"><span>拍攝日期時間 <b id="timeSrcText"></b></span><input id="inShot" type="datetime-local" step="1"></label>
@@ -298,7 +328,7 @@ dialog::backdrop{background:rgba(20,28,27,.6)}
 
 <script type="module">
 /* ======================= 設定 ======================= */
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 const CONFIG = {
   mpVersion: '1.0.1',
   wasmBase: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
@@ -339,7 +369,8 @@ const S = {
   shot:{date:null, source:''},
   fileBase:'',
   editing:false, selected:null, drag:null,
-  view:{k:1},
+  view:{k:1,zoom:1,ox:0,oy:0,cw:0,ch:0},
+  exportView:{scale:1,cropX:0,cropY:0},
   export:null          // {blob, fileName}
 };
 
@@ -372,9 +403,10 @@ function measure(p){
   const t = cross(sub(p.shR,p.neck),u)/c;
   const X = add(p.neck, mul(m,t));    // 中線與肩線交點
   const side = Math.abs(delta) < CONFIG.centerTolerance ? 'center' : (delta>0 ? 'left' : 'right');
-  return {ok:true, acute, delta, side, X, eyeMid, u};
+  return {ok:true, acute, delta, side, X, eyeMid, u, n};
 }
-const SIDE_TEXT = {left:'頭部偏向孩童左側', right:'頭部偏向孩童右側', center:'頭部大致置中'};
+const SIDE_TEXT = {left:'頭部偏向孩童左側', right:'頭部偏向孩童右側', center:'頭部大致置中（接近垂直）'};
+const SIDE_LABEL = {left:'頭偏左', right:'頭偏右', center:'接近垂直'};
 
 /* ======================= 年齡 ======================= */
 function addMonthsClamped(y,m,d,add){
@@ -634,8 +666,25 @@ function fitView(){
   const dpr=window.devicePixelRatio||1;
   view.style.width=w+'px'; view.style.height=h+'px';
   view.width=Math.round(w*dpr); view.height=Math.round(h*dpr);
-  S.view={k, dpr};
+  S.view={k, dpr, cw:w, ch:h, zoom:1, ox:0, oy:0};
+  updateZoomBadge();
 }
+function clampPan(){
+  const V=S.view, K=V.k*V.zoom, imgW=S.src.width*K, imgH=S.src.height*K;
+  V.ox = imgW<=V.cw ? (V.cw-imgW)/2 : Math.min(0,Math.max(V.cw-imgW,V.ox));
+  V.oy = imgH<=V.ch ? (V.ch-imgH)/2 : Math.min(0,Math.max(V.ch-imgH,V.oy));
+}
+function updateZoomBadge(){ $('zoomBadge').textContent = Math.round(S.view.zoom*100)+'%'; }
+/* 以 CSS 座標 pivot 為中心縮放，縮放後 pivot 對應的原圖點位置維持不變 */
+function zoomAt(newZoom, pivot){
+  const V=S.view; newZoom=Math.min(6,Math.max(1,newZoom));
+  const K0=V.k*V.zoom, srcX=(pivot.x-V.ox)/K0, srcY=(pivot.y-V.oy)/K0;
+  V.zoom=newZoom;
+  const K1=V.k*V.zoom;
+  V.ox=pivot.x-srcX*K1; V.oy=pivot.y-srcY*K1;
+  clampPan(); updateZoomBadge();
+}
+function resetView(){ if(!S.view) return; S.view.zoom=1; S.view.ox=0; S.view.oy=0; clampPan(); updateZoomBadge(); render(); }
 function strokeLine(ctx,a,b,color,lw,dash){
   ctx.save();
   ctx.lineCap='round';
@@ -663,7 +712,8 @@ function roundRect(ctx,x,y,w,h,r){
 /* k: 原圖像素 → 目標畫布像素；u: 基本單位（目標像素） */
 function drawScene(ctx,k,u,opt={}){
   const p=S.pts; if(!p) return;
-  const P=q=>({x:q.x*k,y:q.y*k});
+  const org=opt.origin||{x:0,y:0};
+  const P=q=>({x:(q.x-org.x)*k,y:(q.y-org.y)*k});
   const lw=u*1.3;
   const r=measure(p);
   // 肩線（延長）
@@ -675,20 +725,23 @@ function drawScene(ctx,k,u,opt={}){
     const X=P(r.X), E=P(r.eyeMid);
     const top=add(E,mul(sub(E,X),.3));
     strokeLine(ctx,top,X,COLORS.mid,lw);
-    // 夾角弧
+    // 垂直參考線（與雙肩連線垂直，通過交點；虛線，僅供比對）
+    const refLen=Math.max(len(sub(E,X))*.6,u*24);
+    strokeLine(ctx,sub(X,mul(r.n,refLen*.28)),add(X,mul(r.n,refLen)),'rgba(233,238,235,.65)',lw*.55,[u*1.5,u*1.8]);
+    // 夾角弧：垂直參考線 → 中線，數值＝與垂直線的偏差角
     const dm=norm(sub(E,X));
-    const ds=r.side==='right'?mul(r.u,-1):r.u;
-    const R=Math.min(len(sub(E,X))*.4,u*26);
-    const aS=Math.atan2(ds.y,ds.x), aM=Math.atan2(dm.y,dm.x);
+    const R=Math.min(len(sub(E,X))*.35,u*22);
+    const aS=Math.atan2(r.n.y,r.n.x), aM=Math.atan2(dm.y,dm.x);
     let diff=aM-aS; while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
+    const arcColor = r.side==='center'?getComputedStyle(document.body).getPropertyValue('--good'):getComputedStyle(document.body).getPropertyValue('--tilt');
     ctx.save();
     ctx.beginPath(); ctx.moveTo(X.x,X.y); ctx.arc(X.x,X.y,R,aS,aS+diff,diff<0); ctx.closePath();
-    ctx.fillStyle='rgba(255,79,139,.28)'; ctx.fill();
+    ctx.fillStyle=arcColor.trim()+'48'; ctx.fill();
     ctx.beginPath(); ctx.arc(X.x,X.y,R,aS,aS+diff,diff<0);
-    ctx.strokeStyle=COLORS.arc; ctx.lineWidth=lw*.9; ctx.stroke();
+    ctx.strokeStyle=arcColor.trim(); ctx.lineWidth=lw*.9; ctx.stroke();
     ctx.restore();
     const bis=aS+diff/2;
-    tagText(ctx,`${r.acute.toFixed(1)}°`,X.x+Math.cos(bis)*R*1.55,X.y+Math.sin(bis)*R*1.55,u*7,'#FFD0E0');
+    if (opt.labels!==false) tagText(ctx,`${Math.abs(r.delta).toFixed(1)}°`,X.x+Math.cos(bis)*R*1.7,X.y+Math.sin(bis)*R*1.7,u*7,'#fff');
     // 交點
     ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=u*.6;
     ctx.beginPath(); ctx.arc(X.x,X.y,u*1.8,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
@@ -716,18 +769,21 @@ function drawScene(ctx,k,u,opt={}){
 }
 function render(){
   if (!S.src) return;
-  const {k,dpr}=S.view;
+  const {dpr,ox,oy,zoom}=S.view, k=S.view.k*zoom;
   vctx.setTransform(1,0,0,1,0,0);
   vctx.clearRect(0,0,view.width,view.height);
-  vctx.drawImage(S.src,0,0,view.width,view.height);
+  vctx.setTransform(dpr,0,0,dpr,ox*dpr,oy*dpr);
+  vctx.drawImage(S.src,0,0,S.src.width*k,S.src.height*k);
   if (S.pts){
-    vctx.setTransform(dpr,0,0,dpr,0,0);
     drawScene(vctx,k,2,{selected:S.selected,labels:true});
-    if (S.drag) drawLoupe();
+  }
+  if (S.drag){
+    vctx.setTransform(dpr,0,0,dpr,0,0);
+    drawLoupe();
   }
 }
 function drawLoupe(){
-  const {k,dpr}=S.view, key=S.drag.key, q=S.pts[key];
+  const dpr=S.view.dpr, k=S.view.k*S.view.zoom, key=S.drag.key, q=S.pts[key];
   const cssW=view.width/dpr, R=Math.min(70,cssW*.18), zoom=3;
   const left = q.x*k > cssW/2;
   const cx = left ? R+8 : cssW-R-8, cy=R+8;
@@ -760,19 +816,23 @@ function updateResult(){
     return;
   }
   exportBtn.disabled=false;
-  $('angleText').innerHTML=`${r.acute.toFixed(1)}<small>°</small>`;
-  $('sideText').innerHTML=`<b>${SIDE_TEXT[r.side]}</b>　偏離垂直 ${Math.abs(r.delta).toFixed(1)}°`;
-  // 小量角器：底線為肩線，斜線為中線
-  const cx=60, cy=66, L=58;
+  const box=$('angleBox');
+  box.className='angle side-'+r.side;
+  $('sideLabel').textContent=SIDE_LABEL[r.side];
+  $('angleText').innerHTML=`${Math.abs(r.delta).toFixed(1)}<small>°</small>`;
+  $('sideText').textContent = r.side==='center' ? '與垂直參考線的偏差角度（正常範圍）' : '與垂直參考線的偏差角度';
+  // 小量角器：垂直虛線為參考，實線為頭部中線，弧形＝偏差角
+  const cx=60, cy=66, L=54, ar=24;
   const dx = r.side==='right'?-1:1;
-  const ang=(90-Math.abs(r.delta))/DEG;
-  const ex=cx+Math.cos(ang)*L*dx, ey=cy-Math.sin(ang)*L;
-  const ar=26, ax=cx+Math.cos(ang)*ar*dx, ay=cy-Math.sin(ang)*ar;
-  const sweep = dx>0 ? 0 : 1;
+  const theta = Math.abs(r.delta)/DEG;
+  const ex=cx+Math.sin(theta)*L*dx, ey=cy-Math.cos(theta)*L;
+  const ax=cx+Math.sin(theta)*ar*dx, ay=cy-Math.cos(theta)*ar;
+  const sweep = dx>0 ? 1 : 0;
+  const arcColor=getComputedStyle(document.body).getPropertyValue(r.side==='center'?'--good':'--tilt').trim();
   $('protractor').innerHTML=`
-    <line x1="4" y1="${cy}" x2="116" y2="${cy}" stroke="${COLORS.shoulder}" stroke-width="4" stroke-linecap="round"/>
-    <line x1="${cx}" y1="${cy}" x2="${cx}" y2="4" stroke="#C9D2CF" stroke-width="1.5" stroke-dasharray="3 3"/>
-    <path d="M${cx},${cy} L${cx+ar*dx},${cy} A${ar},${ar} 0 0 ${sweep} ${ax},${ay} Z" fill="rgba(255,79,139,.3)" stroke="${COLORS.arc}" stroke-width="2"/>
+    <line x1="6" y1="${cy}" x2="114" y2="${cy}" stroke="${COLORS.shoulder}" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy-ar-16}" stroke="#C9D2CF" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M${cx},${cy} L${cx},${cy-ar} A${ar},${ar} 0 0 ${sweep} ${ax},${ay} Z" fill="${arcColor}48" stroke="${arcColor}" stroke-width="2"/>
     <line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="#139DBB" stroke-width="4" stroke-linecap="round"/>
     <circle cx="${cx}" cy="${cy}" r="3.5" fill="#1D2B2A"/>`;
 }
@@ -827,33 +887,95 @@ function markManual(key){
   if (key==='neck') S.neckFollow=false;
   if ((key==='shR'||key==='shL') && S.neckFollow) S.pts.neck=mid(S.pts.shR,S.pts.shL);
 }
+function toCss(e){ const rect=view.getBoundingClientRect(); return {x:e.clientX-rect.left, y:e.clientY-rect.top}; }
 function evtToSrc(e){
-  const rect=view.getBoundingClientRect(), k=S.view.k;
-  return {x:(e.clientX-rect.left)/k, y:(e.clientY-rect.top)/k};
+  const c=toCss(e), V=S.view, k=V.k*V.zoom;
+  return {x:(c.x-V.ox)/k, y:(c.y-V.oy)/k};
 }
+const touchPts=new Map(); // pointerId -> {x,y} CSS 座標（相對畫布），用於平移／雙指縮放
+let pinchState=null;
+
 view.addEventListener('pointerdown',e=>{
-  if (!S.editing || !S.pts) return;
-  const p=evtToSrc(e), k=S.view.k;
-  const hitR=(e.pointerType==='touch'?30:16)/k;
-  let best=null, bd=Infinity;
-  for (const key of KEYS){const d=len(sub(S.pts[key],p)); if(d<bd){bd=d;best=key;}}
-  if (bd>hitR) return;
+  if (!S.pts) return;
+  if (S.editing){
+    const p=evtToSrc(e), k=S.view.k*S.view.zoom;
+    const hitR=(e.pointerType==='touch'?30:16)/k;
+    let best=null, bd=Infinity;
+    for (const key of KEYS){const d=len(sub(S.pts[key],p)); if(d<bd){bd=d;best=key;}}
+    if (bd<=hitR){
+      e.preventDefault();
+      view.setPointerCapture(e.pointerId);
+      S.drag={key:best,id:e.pointerId,off:sub(S.pts[best],p)};
+      S.selected=best; buildChips(); render();
+      return;
+    }
+  }
+  // 未點中任何點位：進入平移／縮放模式
   e.preventDefault();
   view.setPointerCapture(e.pointerId);
-  S.drag={key:best,id:e.pointerId,off:sub(S.pts[best],p)};
-  S.selected=best; buildChips(); render();
+  touchPts.set(e.pointerId, toCss(e));
+  if (touchPts.size===2){
+    const pts=[...touchPts.values()], V=S.view, k=V.k*V.zoom;
+    const mid_={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
+    pinchState={startDist:Math.max(1,len(sub(pts[0],pts[1]))), startZoom:V.zoom,
+      pivotSrc:{x:(mid_.x-V.ox)/k,y:(mid_.y-V.oy)/k}};
+  }
 });
 view.addEventListener('pointermove',e=>{
-  if (!S.drag || e.pointerId!==S.drag.id) return;
+  if (S.drag && e.pointerId===S.drag.id){
+    e.preventDefault();
+    const p=add(evtToSrc(e),S.drag.off);
+    p.x=Math.max(0,Math.min(S.src.width,p.x)); p.y=Math.max(0,Math.min(S.src.height,p.y));
+    S.pts[S.drag.key]=p; markManual(S.drag.key);
+    render(); updateResult();
+    return;
+  }
+  if (!touchPts.has(e.pointerId)) return;
   e.preventDefault();
-  const p=add(evtToSrc(e),S.drag.off);
-  p.x=Math.max(0,Math.min(S.src.width,p.x)); p.y=Math.max(0,Math.min(S.src.height,p.y));
-  S.pts[S.drag.key]=p; markManual(S.drag.key);
-  render(); updateResult();
+  const prev=touchPts.get(e.pointerId);
+  touchPts.set(e.pointerId, toCss(e));
+  if (touchPts.size===1){
+    const cur=touchPts.get(e.pointerId);
+    S.view.ox+=cur.x-prev.x; S.view.oy+=cur.y-prev.y; clampPan();
+    render();
+  } else if (touchPts.size===2 && pinchState){
+    const pts=[...touchPts.values()];
+    const dist=len(sub(pts[0],pts[1]));
+    const mid_={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
+    const newZoom=Math.min(6,Math.max(1,pinchState.startZoom*(dist/pinchState.startDist)));
+    S.view.zoom=newZoom;
+    const k=S.view.k*newZoom;
+    S.view.ox=mid_.x-pinchState.pivotSrc.x*k; S.view.oy=mid_.y-pinchState.pivotSrc.y*k;
+    clampPan(); updateZoomBadge();
+    render();
+  }
 });
-const endDrag=e=>{ if(S.drag && e.pointerId===S.drag.id){S.drag=null; buildChips(); render();} };
-view.addEventListener('pointerup',endDrag);
-view.addEventListener('pointercancel',endDrag);
+function endPointer(e){
+  if (S.drag && e.pointerId===S.drag.id){ S.drag=null; buildChips(); render(); return; }
+  if (touchPts.has(e.pointerId)){
+    touchPts.delete(e.pointerId);
+    pinchState=null;
+    if (touchPts.size===2){
+      const pts=[...touchPts.values()], V=S.view, k=V.k*V.zoom;
+      const mid_={x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2};
+      pinchState={startDist:Math.max(1,len(sub(pts[0],pts[1]))), startZoom:V.zoom,
+        pivotSrc:{x:(mid_.x-V.ox)/k,y:(mid_.y-V.oy)/k}};
+    }
+  }
+}
+view.addEventListener('pointerup',endPointer);
+view.addEventListener('pointercancel',endPointer);
+view.addEventListener('wheel',e=>{
+  if (!S.src) return;
+  e.preventDefault();
+  const c=toCss(e);
+  const factor=Math.exp(-e.deltaY*0.0016);
+  zoomAt(S.view.zoom*factor, c);
+  render();
+},{passive:false});
+$('zoomIn').onclick=()=>{ if(!S.src)return; zoomAt(S.view.zoom*1.4,{x:S.view.cw/2,y:S.view.ch/2}); render(); };
+$('zoomOut').onclick=()=>{ if(!S.src)return; zoomAt(S.view.zoom/1.4,{x:S.view.cw/2,y:S.view.ch/2}); render(); };
+$('zoomReset').onclick=()=>{ resetView(); };
 
 $('nudge').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b||!S.selected||!S.pts) return;
@@ -886,93 +1008,167 @@ function wrapText(ctx,text,maxW){
   }
   return out;
 }
-function pointSummary(){
-  const man=KEYS.filter(k=>S.ptSrc[k]==='manual').map(k=>POINTS[k].label);
-  const def=KEYS.filter(k=>S.ptSrc[k]==='default').map(k=>POINTS[k].label);
-  const parts=[];
-  if (man.length) parts.push(`手動校正：${man.join('、')}`);
-  else parts.push(def.length?'未手動校正':'全部自動偵測，未手動校正');
-  if (def.length) parts.push(`預設位置未校正：${def.join('、')}`);
-  parts.push(S.neckFollow?'頸點＝雙肩中點':'頸點為手動指定');
-  return parts.join('；');
+function cropRect(){
+  const EV=S.exportView, cropW=S.src.width/EV.scale, cropH=S.src.height/EV.scale;
+  return {x:EV.cropX,y:EV.cropY,w:cropW,h:cropH};
 }
-
 function buildExport(info){
   const r=measure(S.pts);
-  const k=Math.min(1,CONFIG.maxExportSide/Math.max(S.src.width,S.src.height));
-  const W=Math.round(S.src.width*k), IH=Math.round(S.src.height*k);
+  const crop=cropRect();
+  const outK=Math.min(2,CONFIG.maxExportSide/Math.max(crop.w,crop.h));
+  const W=Math.round(crop.w*outK), IH=Math.round(crop.h*outK);
   const u=Math.max(W,IH)/260;
   const fam=getComputedStyle(document.body).fontFamily;
-  const fs=Math.max(22,Math.round(W/34));
-  const padX=Math.round(W*.045);
+  const fs=Math.max(24,Math.round(W/30));
+  const padX=Math.round(W*.05);
 
   const rows=[];
   if (info.name) rows.push(['姓名',info.name]);
-  if (info.birth){ rows.push(['出生日期',`${info.birth.getFullYear()}/${pad2(info.birth.getMonth()+1)}/${pad2(info.birth.getDate())}`]);
-                   rows.push(['拍攝時年齡',info.age]); }
-  rows.push(['拍攝時間',`${fmtDateTime(info.shot)}\n（來源：${info.shotSource}）`]);
-  rows.push(['偏向',`${SIDE_TEXT[r.side]}，中線偏離垂直 ${Math.abs(r.delta).toFixed(1)}°`]);
-  rows.push(['點位',pointSummary()]);
-  if (S.warnings.length) rows.push(['品質提示',S.warnings.map(w=>'・'+w.text).join('\n')]);
-  rows.push(['量測定義','夾角＝雙肩連線與頭部中線（兩眼中點—頸點）所夾、小於 90° 的一側；左右以孩童本人為準。']);
+  if (info.birth) rows.push(['拍攝時年齡',info.age]);
+  rows.push(['拍攝時間',fmtDateTime(info.shot)]);
 
   const m=document.createElement('canvas').getContext('2d');
   const labelW=fs*5.2, valW=W-padX*2-labelW;
-  m.font=`${fs}px ${fam}`;
-  const lh=fs*1.5;
+  m.font=`${fs*.92}px ${fam}`;
+  const lh=fs*1.4;
   const rowLines=rows.map(([l,v])=>wrapText(m,v,valW));
-  const disclaimer='本圖片由「斜頸角度紀錄」輔助紀錄工具產生，數值受拍攝條件與自動偵測準確度影響，不具醫療診斷效力，不可作為治療決策之唯一依據。';
-  m.font=`${fs*.78}px ${fam}`;
-  const discLines=wrapText(m,disclaimer,W-padX*2);
-  const headH=fs*4.6;
-  const bodyH=rowLines.reduce((s,ls)=>s+ls.length*lh+fs*.5,0);
-  const footH=discLines.length*fs*1.25+fs*2.6;
-  const PH=Math.ceil(padX*.8+headH+bodyH+footH);
+  const disclaimer='輔助紀錄工具產生，不具醫療診斷效力，不可作為治療決策之唯一依據。';
+  const headH=fs*2.5;
+  const bodyH=rowLines.reduce((s,ls)=>s+ls.length*lh+fs*.35,0);
+  const footH=fs*1.9;
+  const PH=Math.ceil(padX*.9+headH+bodyH+footH);
 
   const c=document.createElement('canvas'); c.width=W; c.height=IH+PH;
   const x=c.getContext('2d');
-  x.drawImage(S.src,0,0,W,IH);
-  drawScene(x,k,u,{labels:true});
+  x.drawImage(S.src,crop.x,crop.y,crop.w,crop.h,0,0,W,IH);
+  drawScene(x,outK,u,{labels:true,origin:{x:crop.x,y:crop.y}});
 
   // 資訊區
   x.fillStyle='#FFFFFF'; x.fillRect(0,IH,W,PH);
-  x.fillStyle='#1F6F63'; x.fillRect(0,IH,W,Math.max(4,fs*.22));
-  let y=IH+padX*.8;
+  const accentColor=r.side==='center'?'#1F8A5F':'#D6455A';
+  x.fillStyle=accentColor; x.fillRect(0,IH,W,Math.max(4,fs*.2));
+  let y=IH+padX*.9;
   x.textBaseline='top';
-  x.fillStyle='#5E6E6B'; x.font=`${fs*.95}px ${fam}`;
-  x.fillText('雙肩連線與頭部中線夾角',padX,y);
-  x.fillStyle='#1D2B2A'; x.font=`300 ${fs*2.9}px ${fam}`;
-  const angleStr=`${r.acute.toFixed(1)}°`;
-  x.fillText(angleStr,padX,y+fs*1.35);
-  const aw=x.measureText(angleStr).width;
-  x.font=`600 ${fs*1.15}px ${fam}`; x.fillStyle='#1F6F63';
-  x.fillText(SIDE_TEXT[r.side],padX+aw+fs*.9,y+fs*2.55);
+  x.font=`600 ${fs*1.05}px ${fam}`; x.fillStyle=accentColor;
+  x.fillText(SIDE_LABEL[r.side],padX,y+fs*.35);
+  const lw=x.measureText(SIDE_LABEL[r.side]).width;
+  x.font=`300 ${fs*2.1}px ${fam}`;
+  x.fillText(`${Math.abs(r.delta).toFixed(1)}°`,padX+lw+fs*.5,y);
   y+=headH;
 
   rows.forEach(([l],i)=>{
-    x.font=`${fs*.9}px ${fam}`; x.fillStyle='#5E6E6B';
-    x.fillText(l,padX,y+fs*.05);
-    x.font=`${fs}px ${fam}`; x.fillStyle=l==='品質提示'?'#8A4B00':'#1D2B2A';
+    x.font=`${fs*.85}px ${fam}`; x.fillStyle='#5E6E6B';
+    x.fillText(l,padX,y+fs*.03);
+    x.font=`${fs*.92}px ${fam}`; x.fillStyle='#1D2B2A';
     rowLines[i].forEach((ln,j)=>x.fillText(ln,padX+labelW,y+j*lh));
-    y+=rowLines[i].length*lh+fs*.5;
+    y+=rowLines[i].length*lh+fs*.35;
   });
-  y+=fs*.6;
+  y+=fs*.4;
   x.strokeStyle='#D3DBD8'; x.lineWidth=Math.max(1,fs*.05);
   x.beginPath(); x.moveTo(padX,y); x.lineTo(W-padX,y); x.stroke();
-  y+=fs*.6;
-  x.font=`${fs*.78}px ${fam}`; x.fillStyle='#5E6E6B';
-  discLines.forEach((ln,j)=>x.fillText(ln,padX,y+j*fs*1.25));
-  y+=discLines.length*fs*1.25+fs*.3;
-  x.fillText(`匯出時間 ${fmtDateTime(new Date())}・版本 ${APP_VERSION}`,padX,y);
+  y+=fs*.45;
+  x.font=`${fs*.62}px ${fam}`; x.fillStyle='#8A9490';
+  x.fillText(disclaimer,padX,y);
+  x.textAlign='right';
+  x.fillText(`${fmtDateTime(new Date())}`,W-padX,y);
+  x.textAlign='left';
   return c;
 }
 
 function openExport(){
   $('formErr').textContent='';
   $('inShot').value=toLocalInput(S.shot.date||new Date());
-  $('timeSrcText').textContent=`（${S.shot.source}）`;
+  $('timeSrcText').textContent=`（${S.shot.source}，可修改）`;
+  S.exportView={scale:1,cropX:0,cropY:0};
   $('dlgExport').showModal();
+  requestAnimationFrame(()=>requestAnimationFrame(setupCropCanvas));
 }
+
+/* ======================= 匯出前：裁切／縮放照片 ======================= */
+function clampCrop(){
+  const EV=S.exportView, cropW=S.src.width/EV.scale, cropH=S.src.height/EV.scale;
+  EV.cropX=Math.min(Math.max(0,EV.cropX), Math.max(0,S.src.width-cropW));
+  EV.cropY=Math.min(Math.max(0,EV.cropY), Math.max(0,S.src.height-cropH));
+}
+function setupCropCanvas(){
+  const wrap=$('cropWrap'), cv=$('cropView');
+  const cssW=wrap.clientWidth||300, cssH=Math.round(cssW*S.src.height/S.src.width);
+  wrap.style.height=cssH+'px';
+  const dpr=window.devicePixelRatio||1;
+  cv.style.width=cssW+'px'; cv.style.height=cssH+'px';
+  cv.width=Math.round(cssW*dpr); cv.height=Math.round(cssH*dpr);
+  S.cropCanvasCss={w:cssW,h:cssH,dpr};
+  $('cropZoom').value=100;
+  renderCrop();
+}
+function renderCrop(){
+  const cv=$('cropView'), ctx=cv.getContext('2d');
+  const {w,h,dpr}=S.cropCanvasCss;
+  const crop=cropRect();
+  const previewK=w/crop.w;
+  ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.drawImage(S.src,crop.x,crop.y,crop.w,crop.h,0,0,w,h);
+  drawScene(ctx,previewK,1.6,{labels:false,origin:{x:crop.x,y:crop.y}});
+}
+function cropZoomAt(newScale,pivotCss){
+  const EV=S.exportView, crop0=cropRect(), previewK0=S.cropCanvasCss.w/crop0.w;
+  const srcX=crop0.x+pivotCss.x/previewK0, srcY=crop0.y+pivotCss.y/previewK0;
+  EV.scale=Math.min(4,Math.max(1,newScale));
+  const crop1W=S.src.width/EV.scale, crop1H=S.src.height/EV.scale;
+  const previewK1=S.cropCanvasCss.w/crop1W;
+  EV.cropX=srcX-pivotCss.x/previewK1; EV.cropY=srcY-pivotCss.y/previewK1;
+  clampCrop();
+  $('cropZoom').value=Math.round(EV.scale*100);
+}
+const cropTouches=new Map(); let cropPinch=null;
+function cropCssPt(e){ const r=$('cropView').getBoundingClientRect(); return {x:e.clientX-r.left,y:e.clientY-r.top}; }
+$('cropView').addEventListener('pointerdown',e=>{
+  if(!S.src) return; e.preventDefault();
+  $('cropView').setPointerCapture(e.pointerId);
+  cropTouches.set(e.pointerId,cropCssPt(e));
+  if (cropTouches.size===2){
+    const pts=[...cropTouches.values()];
+    cropPinch={startDist:Math.max(1,len(sub(pts[0],pts[1]))), startScale:S.exportView.scale,
+      mid:{x:(pts[0].x+pts[1].x)/2,y:(pts[0].y+pts[1].y)/2}};
+  }
+});
+$('cropView').addEventListener('pointermove',e=>{
+  if(!cropTouches.has(e.pointerId)) return; e.preventDefault();
+  const prev=cropTouches.get(e.pointerId);
+  cropTouches.set(e.pointerId,cropCssPt(e));
+  if (cropTouches.size===1){
+    const cur=cropTouches.get(e.pointerId), previewK=S.cropCanvasCss.w/cropRect().w;
+    S.exportView.cropX-=(cur.x-prev.x)/previewK;
+    S.exportView.cropY-=(cur.y-prev.y)/previewK;
+    clampCrop(); renderCrop();
+  } else if (cropTouches.size===2 && cropPinch){
+    const pts=[...cropTouches.values()];
+    const dist=len(sub(pts[0],pts[1]));
+    cropZoomAt(cropPinch.startScale*(dist/cropPinch.startDist), cropPinch.mid);
+    renderCrop();
+  }
+});
+function cropEnd(e){
+  if(cropTouches.has(e.pointerId)){ cropTouches.delete(e.pointerId); cropPinch=null; }
+}
+$('cropView').addEventListener('pointerup',cropEnd);
+$('cropView').addEventListener('pointercancel',cropEnd);
+$('cropView').addEventListener('wheel',e=>{
+  if(!S.src) return; e.preventDefault();
+  const factor=Math.exp(-e.deltaY*0.0016);
+  cropZoomAt(S.exportView.scale*factor, cropCssPt(e));
+  renderCrop();
+},{passive:false});
+$('cropZoom').addEventListener('input',e=>{
+  const c=cropRect(), previewK=S.cropCanvasCss.w/c.w;
+  cropZoomAt((+e.target.value)/100, {x:S.cropCanvasCss.w/2,y:S.cropCanvasCss.h/2});
+  renderCrop();
+});
+$('cropIn').onclick=()=>{ cropZoomAt(S.exportView.scale*1.3,{x:S.cropCanvasCss.w/2,y:S.cropCanvasCss.h/2}); renderCrop(); };
+$('cropOut').onclick=()=>{ cropZoomAt(S.exportView.scale/1.3,{x:S.cropCanvasCss.w/2,y:S.cropCanvasCss.h/2}); renderCrop(); };
+$('cropReset').onclick=()=>{ S.exportView={scale:1,cropX:0,cropY:0}; $('cropZoom').value=100; renderCrop(); };
+window.addEventListener('resize',()=>{ if($('dlgExport').open) setupCropCanvas(); });
 async function makeExport(skip){
   const err=$('formErr'); err.textContent='';
   const shotVal=$('inShot').value;
