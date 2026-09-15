@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1F6F63">
+<title>斜頸角度紀錄</title>
+<style>
+:root{
+  --paper:#EEF1EE; --panel:#FFFFFF; --ink:#1D2B2A; --muted:#5E6E6B; --line:#D3DBD8;
+  --accent:#1F6F63; --accent-ink:#FFFFFF; --accent-soft:#DDEBE7;
+  --shoulder:#FFB020; --mid:#22C3E6; --arc:#FF4F8B;
+  --warn:#8A4B00; --warn-bg:#FFF1DC; --err:#A3231B; --err-bg:#FDE7E5;
+  --font:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.6;-webkit-text-size-adjust:100%}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:720px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:8px 0 12px}
+h1{font-size:1.5rem;line-height:1.25;margin:0;font-weight:600;letter-spacing:.02em}
+header p{margin:2px 0 0;color:var(--muted);font-size:.875rem}
+.link{background:none;border:0;color:var(--accent);text-decoration:underline;padding:4px 0;white-space:nowrap}
+
+.steps{display:flex;gap:4px;margin:4px 0 16px;padding:0;list-style:none;counter-reset:s}
+.steps li{flex:1;font-size:.75rem;color:var(--muted);border-top:3px solid var(--line);padding-top:6px;counter-increment:s}
+.steps li::before{content:counter(s) " ";font-weight:700}
+.steps li.on{color:var(--ink);border-color:var(--accent)}
+.steps li.done{border-color:var(--accent-soft)}
+
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
+.panel h2{font-size:1.05rem;margin:0 0 8px;font-weight:600}
+.muted{color:var(--muted);font-size:.875rem}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:46px;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--panel);font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.soft{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row.stack > .btn{flex:1 1 200px}
+
+.stage{position:relative;background:#26302F;border-radius:14px;overflow:hidden;display:flex;justify-content:center}
+#view{display:block;touch-action:auto;max-width:100%}
+.stage.editing #view{touch-action:none}
+.busy{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,28,27,.72);color:#fff;text-align:center;padding:24px}
+.busy.show{display:flex}
+.spinner{width:34px;height:34px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;margin:0 auto 10px;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:3s}}
+
+.notice{border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:.9rem}
+.notice.warn{background:var(--warn-bg);color:var(--warn)}
+.notice.err{background:var(--err-bg);color:var(--err)}
+.notice ul{margin:6px 0 10px;padding-left:1.2em}
+.notice strong{display:block}
+
+/* result readout: the one bold element */
+.readout{display:grid;grid-template-columns:auto 1fr;gap:4px 18px;align-items:center}
+.angle{font-size:4rem;line-height:1;font-weight:300;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.angle small{font-size:1.6rem;font-weight:400;margin-left:2px}
+.readout svg{width:120px;height:74px;justify-self:end}
+.side{grid-column:1/-1;font-size:1rem}
+.side b{font-weight:600}
+
+.edit-bar{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:6px 12px;font-size:.85rem;min-height:36px;display:inline-flex;align-items:center;gap:6px}
+.chip .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.chip[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.chip .tag{font-size:.7rem;color:var(--warn)}
+.nudge{display:grid;grid-template-columns:repeat(3,44px);grid-template-rows:repeat(2,40px);gap:4px;margin-top:10px}
+.nudge button{border:1px solid var(--line);background:var(--panel);border-radius:8px;font-size:1rem}
+.nudge .up{grid-column:2}
+.nudge .left{grid-column:1;grid-row:2}.nudge .down{grid-column:2;grid-row:2}.nudge .right{grid-column:3;grid-row:2}
+.edit-tools{display:none;gap:16px;flex-wrap:wrap;align-items:flex-start}
+.editing-on .edit-tools{display:flex}
+
+footer{color:var(--muted);font-size:.8rem;margin-top:18px}
+
+/* dialogs */
+dialog{border:0;border-radius:16px;padding:0;max-width:min(560px,calc(100vw - 24px));width:100%;color:var(--ink);background:var(--panel)}
+dialog::backdrop{background:rgba(20,28,27,.6)}
+.dlg{padding:20px}
+.dlg h2{margin:0 0 10px;font-size:1.15rem}
+.dlg .scroll{max-height:62vh;overflow:auto}
+.dlg h3{font-size:.95rem;margin:14px 0 4px}
+.dlg ul,.dlg ol{margin:4px 0;padding-left:1.3em}
+.dlg li{margin:2px 0}
+.field{display:block;margin:10px 0}
+.field span{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+.field input{width:100%;min-height:46px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fff}
+.form-err{color:var(--err);font-size:.85rem;min-height:1.2em}
+.dlg .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:14px}
+#previewImg{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+
+/* camera */
+.cam{position:fixed;inset:0;background:#000;z-index:50;display:none;flex-direction:column}
+.cam.show{display:flex}
+.cam-view{position:relative;flex:1;overflow:hidden}
+.cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.cam svg.guide{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.level{position:absolute;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;border-radius:999px;padding:6px 14px;font-size:.85rem;border:2px solid #888;white-space:nowrap}
+.level.ok{border-color:#3DD68C}.level.bad{border-color:#FFB020}
+.cam-hint{position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-size:.85rem;text-shadow:0 1px 2px #000;padding:0 12px}
+.cam-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 24px calc(16px + env(safe-area-inset-bottom));background:#000}
+.shutter{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:#fff;box-shadow:inset 0 0 0 4px #000}
+.cam-bar .btn{background:transparent;color:#fff;border-color:#555}
+.hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header>
+    <div>
+      <h1>斜頸角度紀錄</h1>
+      <p>雙肩連線與頭部中線的夾角・輔助紀錄工具</p>
+    </div>
+    <button class="link" id="openGuide" type="button">拍攝說明</button>
+  </header>
+
+  <ol class="steps" id="steps" aria-label="操作步驟">
+    <li data-step="1">拍攝照片</li>
+    <li data-step="2">自動畫線</li>
+    <li data-step="3">確認點位</li>
+    <li data-step="4">角度與匯出</li>
+  </ol>
+
+  <!-- Step 1 -->
+  <section class="panel" id="startPanel">
+    <h2>拍一張孩童的正面半身照</h2>
+    <p class="muted">照片只在這支手機上處理，不會上傳到任何伺服器。第一次使用需下載偵測模型，請保持網路連線。</p>
+    <div class="row stack">
+      <button class="btn primary" id="btnCamera" type="button">開啟相機拍攝</button>
+      <button class="btn" id="btnUpload" type="button">從相簿選擇照片</button>
+    </div>
+    <input type="file" id="fileUpload" accept="image/*" class="hidden">
+    <input type="file" id="fileCapture" accept="image/*" capture="environment" class="hidden">
+  </section>
+
+  <!-- Work area -->
+  <section id="workArea" class="hidden">
+    <div id="qualityBox"></div>
+
+    <div class="stage" id="stage">
+      <canvas id="view" aria-label="照片與量測線"></canvas>
+      <div class="busy" id="busy" role="status" aria-live="polite"><div><div class="spinner"></div><div id="busyText">處理中</div></div></div>
+    </div>
+
+    <div class="panel" id="editPanel" style="margin-top:14px">
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <h2 style="margin:0">點位是否正確？</h2>
+        <button class="btn soft" id="btnEdit" type="button" aria-pressed="false">手動校正點位</button>
+      </div>
+      <p class="muted" id="editHint" style="margin:6px 0 0">若線條位置正確，可直接看下方角度。需要調整時，按「手動校正點位」後拖曳圓點。</p>
+      <div class="edit-tools">
+        <div>
+          <div class="edit-bar" id="chips"></div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn" id="btnNeckReset" type="button">頸點回到雙肩中點</button>
+            <button class="btn" id="btnRedetect" type="button">重新自動偵測</button>
+          </div>
+        </div>
+        <div>
+          <div class="muted">微調選取的點</div>
+          <div class="nudge" id="nudge">
+            <button class="up" data-dx="0" data-dy="-1" type="button" aria-label="上移">↑</button>
+            <button class="left" data-dx="-1" data-dy="0" type="button" aria-label="左移">←</button>
+            <button class="down" data-dx="0" data-dy="1" type="button" aria-label="下移">↓</button>
+            <button class="right" data-dx="1" data-dy="0" type="button" aria-label="右移">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="resultPanel">
+      <div class="readout">
+        <div class="angle" id="angleText">--<small>°</small></div>
+        <svg id="protractor" viewBox="0 0 120 74" aria-hidden="true"></svg>
+        <div class="side" id="sideText">—</div>
+      </div>
+      <p class="muted" style="margin:8px 0 0">夾角為雙肩連線與頭部中線（兩眼中點—頸點）所夾、小於 90° 的一側。左右以孩童本人為準。</p>
+      <div class="row stack" style="margin-top:14px">
+        <button class="btn primary" id="btnExport" type="button">匯出圖片</button>
+        <button class="btn" id="btnRestart" type="button">換一張照片</button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>注意：</b>本工具僅為輔助紀錄之工具，量測數值受拍攝條件與自動偵測準確度影響，不具醫療診斷效力，不可作為治療決策之唯一依據。如有疑慮，請諮詢專業醫療人員。</p>
+    <p id="verText"></p>
+  </footer>
+</div>
+
+<!-- Camera -->
+<div class="cam" id="cam" role="dialog" aria-label="相機">
+  <div class="cam-view">
+    <video id="video" playsinline muted autoplay></video>
+    <svg class="guide" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <ellipse cx="50" cy="33" rx="13" ry="11" fill="none" stroke="rgba(255,255,255,.75)" stroke-width=".5" stroke-dasharray="2 1.5" vector-effect="non-scaling-stroke"/>
+      <line x1="18" y1="62" x2="82" y2="62" stroke="rgba(255,176,32,.9)" stroke-width="2" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>
+      <line x1="50" y1="15" x2="50" y2="70" stroke="rgba(34,195,230,.6)" stroke-width="1.5" stroke-dasharray="4 6" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div class="level" id="level">傾斜偵測中…</div>
+    <div class="cam-hint">臉放在虛線圈內、雙肩對齊橘色虛線，臉朝正前方</div>
+  </div>
+  <div class="cam-bar">
+    <button class="btn" id="camCancel" type="button">取消</button>
+    <button class="shutter" id="shutter" type="button" aria-label="拍照"></button>
+    <button class="btn" id="camGuide" type="button">說明</button>
+  </div>
+</div>
+
+<!-- Disclaimer -->
+<dialog id="dlgDisclaimer">
+  <div class="dlg">
+    <h2>使用前請注意</h2>
+    <p>本 APP 僅為<b>輔助紀錄之工具</b>，所產生的角度數值受拍攝條件與自動偵測準確度影響，<b>不具醫療診斷效力</b>，亦不可作為治療決策之唯一依據。</p>
+    <p>如有任何疑慮，請諮詢專業醫療人員。</p>
+    <p class="muted">照片與輸入的姓名、生日只在本機處理，不會上傳或保存。</p>
+    <div class="actions"><button class="btn primary" id="btnAgree" type="button">我了解，開始使用</button></div>
+  </div>
+</dialog>
+
+<!-- Guide -->
+<dialog id="dlgGuide">
+  <div class="dlg">
+    <h2>拍攝說明</h2>
+    <div class="scroll">
+      <h3>手機</h3>
+      <ul>
+        <li>使用手機<b>後鏡頭</b>（前鏡頭可能左右鏡像，會讓左右判斷相反）。</li>
+        <li>手機直立，鏡頭高度約與孩童肩膀同高，不要由上往下或由下往上拍。</li>
+        <li>APP 內拍攝時，畫面上方會顯示手機傾斜角度，框線變綠色時再拍。</li>
+        <li>每次追蹤盡量在相同地點、相同距離拍攝。</li>
+      </ul>
+      <h3>孩童姿勢</h3>
+      <ul>
+        <li>孩童正面朝向鏡頭，臉不要轉向左右。可在鏡頭正上方用玩具或聲音吸引視線。</li>
+        <li>可坐在家長腿上或坐姿椅上；家長扶在孩童<b>腰部或腋下</b>，手不要蓋住肩膀。</li>
+        <li>畫面需包含頭頂到雙肩，孩童不要太小（雙肩約占畫面寬度三分之一以上）。</li>
+        <li>畫面中盡量只有孩童一人的臉。</li>
+      </ul>
+      <h3>衣物</h3>
+      <ul>
+        <li>不需裸露肩膀。建議穿<b>貼身、薄、領口不高</b>的上衣，例如短袖包屁衣或薄 T 恤。</li>
+        <li>避免厚外套、帽 T、大領子、圍兜、毛巾或揹巾遮住肩頸。</li>
+        <li>頭髮不要蓋住肩膀。</li>
+        <li>每次追蹤盡量穿同類型衣物，減少肩點位置的差異。</li>
+      </ul>
+      <h3>環境</h3>
+      <ul>
+        <li>光線充足、避免逆光；背景單純，最好是單色。</li>
+        <li>確認照片清楚、沒有晃動模糊。</li>
+      </ul>
+      <h3>關於點位</h3>
+      <ul>
+        <li>自動偵測的肩點是模型推估的<b>肩關節位置</b>，不是衣服邊緣。</li>
+        <li>手動校正時，每次都點在團隊約定的同一個位置（例如肩膀最外側上緣），前後次數值才可比較。</li>
+        <li>手機左右歪斜不會改變兩線的夾角；但前後傾斜、孩童轉頭會影響結果。</li>
+      </ul>
+    </div>
+    <div class="actions"><button class="btn primary" data-close type="button">關閉</button></div>
+  </div>
+</dialog>
+
+<!-- Export form -->
+<dialog id="dlgExport">
+  <div class="dlg">
+    <h2>匯出圖片</h2>
+    <p class="muted" style="margin-top:0">姓名與出生日期可略過。資料只寫入匯出的圖片，不會保存。</p>
+    <label class="field"><span>姓名</span><input id="inName" type="text" autocomplete="off" maxlength="40"></label>
+    <label class="field"><span>出生日期</span><input id="inBirth" type="date"></label>
+    <label class="field"><span>拍攝日期時間 <b id="timeSrcText"></b></span><input id="inShot" type="datetime-local" step="1"></label>
+    <div class="form-err" id="formErr"></div>
+    <div class="actions">
+      <button class="btn" data-close type="button">取消</button>
+      <button class="btn" id="btnSkip" type="button">略過姓名與生日</button>
+      <button class="btn primary" id="btnMake" type="button">產生圖片</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Preview -->
+<dialog id="dlgPreview">
+  <div class="dlg">
+    <h2>圖片已產生</h2>
+    <div class="scroll"><img id="previewImg" alt="匯出的量測圖片"></div>
+    <p class="muted" id="saveHint"></p>
+    <div class="actions">
+      <button class="btn" data-close type="button">關閉</button>
+      <button class="btn" id="btnDownload" type="button">下載檔案</button>
+      <button class="btn primary" id="btnShare" type="button">儲存到相簿／分享</button>
+    </div>
+  </div>
+</dialog>
+
+<script type="module">
+/* ======================= 設定 ======================= */
+const APP_VERSION = '0.1.0';
+const CONFIG = {
+  mpVersion: '1.0.1',
+  wasmBase: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm',
+  bundleUrl: 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs',
+  poseModel: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+  faceModel: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+  maxSourceSide: 2400,      // 處理用影像長邊上限 (px)
+  maxExportSide: 2000,      // 匯出影像長邊上限 (px)
+  // ---- 品質檢查門檻（需以實際照片校正）----
+  minShoulderVisibility: 0.5,  // 肩點信心值
+  maxYawRatio: 0.12,           // 臉部轉向：鼻尖偏離臉寬中心的比例
+  minShoulderWidthRatio: 0.18, // 雙肩寬 / 影像寬
+  minSharpness: 15,            // 清晰度（Laplacian 變異數）
+  minBrightness: 50, maxBrightness: 225,
+  maxPhonePitch: 10,           // APP 內拍攝：手機前後傾斜上限 (°)
+  maxPhoneRoll: 5,             // APP 內拍攝：手機左右傾斜提醒 (°)
+  centerTolerance: 0.5         // 偏離垂直小於此值視為置中 (°)
+};
+
+const COLORS = { shoulder:'#FFB020', mid:'#22C3E6', arc:'#FF4F8B', nose:'#E6ECEA' };
+const POINTS = {
+  eyeR:{label:'右眼', color:COLORS.mid},
+  eyeL:{label:'左眼', color:COLORS.mid},
+  nose:{label:'鼻尖（參考）', color:COLORS.nose},
+  neck:{label:'頸點', color:COLORS.mid},
+  shR:{label:'右肩', color:COLORS.shoulder},
+  shL:{label:'左肩', color:COLORS.shoulder}
+};
+const KEYS = Object.keys(POINTS);
+
+/* ======================= 狀態 ======================= */
+const S = {
+  src:null,            // HTMLCanvasElement（處理用原圖）
+  pts:null,            // {key:{x,y}} 原圖像素座標
+  ptSrc:{},            // key -> 'auto' | 'manual' | 'default'
+  neckFollow:true,
+  warnings:[],         // {level:'err'|'warn', text}
+  shot:{date:null, source:''},
+  fileBase:'',
+  editing:false, selected:null, drag:null,
+  view:{k:1},
+  export:null          // {blob, fileName}
+};
+
+const $ = id => document.getElementById(id);
+const view = $('view'), vctx = view.getContext('2d');
+$('verText').textContent = `版本 ${APP_VERSION}・偵測模型 MediaPipe Tasks Vision ${CONFIG.mpVersion}`;
+
+/* ======================= 幾何 ======================= */
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y}), add=(a,b)=>({x:a.x+b.x,y:a.y+b.y});
+const mul=(a,s)=>({x:a.x*s,y:a.y*s}), dot=(a,b)=>a.x*b.x+a.y*b.y;
+const cross=(a,b)=>a.x*b.y-a.y*b.x, len=a=>Math.hypot(a.x,a.y);
+const mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const norm=a=>{const l=len(a)||1;return{x:a.x/l,y:a.y/l};};
+const DEG=180/Math.PI;
+
+/* 量測：中線 = 兩眼中點 → 頸點；回傳小於 90° 的夾角與偏向側 */
+function measure(p){
+  const sh = sub(p.shL, p.shR);
+  if (len(sh) < 1) return {ok:false, reason:'兩肩點重疊'};
+  const u = norm(sh);                 // 指向「孩童左肩」方向
+  const n = {x:u.y, y:-u.x};          // 垂直於肩線、朝上
+  const eyeMid = mid(p.eyeR, p.eyeL);
+  const m = sub(eyeMid, p.neck);
+  if (len(m) < 1) return {ok:false, reason:'兩眼中點與頸點重疊'};
+  const a = dot(m,u), b = dot(m,n);
+  if (b <= 0) return {ok:false, reason:'兩眼中點位於肩線下方，請檢查點位'};
+  const delta = Math.atan2(a,b)*DEG;  // + 表示偏向孩童左側
+  const acute = 90 - Math.abs(delta);
+  const c = cross(m,u);
+  const t = cross(sub(p.shR,p.neck),u)/c;
+  const X = add(p.neck, mul(m,t));    // 中線與肩線交點
+  const side = Math.abs(delta) < CONFIG.centerTolerance ? 'center' : (delta>0 ? 'left' : 'right');
+  return {ok:true, acute, delta, side, X, eyeMid, u};
+}
+const SIDE_TEXT = {left:'頭部偏向孩童左側', right:'頭部偏向孩童右側', center:'頭部大致置中'};
+
+/* ======================= 年齡 ======================= */
+function addMonthsClamped(y,m,d,add){
+  const t=m+add, yy=y+Math.floor(t/12), mm=((t%12)+12)%12;
+  const dim=new Date(yy,mm+1,0).getDate();
+  return new Date(yy,mm,Math.min(d,dim));
+}
+/* 以曆法計算；月底出生者，該月沒有同日時以當月最後一天計 */
+function ageString(birth,on){
+  const b=new Date(birth.getFullYear(),birth.getMonth(),birth.getDate());
+  const o=new Date(on.getFullYear(),on.getMonth(),on.getDate());
+  if (o<b) return null;
+  const by=b.getFullYear(), bm=b.getMonth(), bd=b.getDate();
+  let months=(o.getFullYear()-by)*12+(o.getMonth()-bm);
+  while (months>0 && addMonthsClamped(by,bm,bd,months)>o) months--;
+  const anchor=addMonthsClamped(by,bm,bd,months);
+  const days=Math.round((o-anchor)/86400000);
+  const y=Math.floor(months/12), mo=months%12;
+  return (y>0?`${y}歲`:'')+`${mo}個月${days}天`;
+}
+
+/* ======================= EXIF 拍攝時間 ======================= */
+async function readExifDate(file){
+  try{
+    const buf=await file.slice(0,512*1024).arrayBuffer();
+    const v=new DataView(buf);
+    if (v.getUint16(0)!==0xFFD8) return null;
+    let off=2;
+    while (off+4<v.byteLength){
+      const marker=v.getUint16(off); off+=2;
+      if ((marker&0xFF00)!==0xFF00) return null;
+      if (marker===0xFFDA || marker===0xFFD9) return null;
+      const L=v.getUint16(off);
+      if (marker===0xFFE1 && v.getUint32(off+2)===0x45786966) return parseTiffDate(v,off+8);
+      off+=L;
+    }
+  }catch(e){}
+  return null;
+}
+function parseTiffDate(v,t){
+  const le=v.getUint16(t)===0x4949;
+  const u16=o=>v.getUint16(t+o,le), u32=o=>v.getUint32(t+o,le);
+  const ascii=(o,n)=>{let s='';for(let i=0;i<n;i++){const c=v.getUint8(t+o+i);if(!c)break;s+=String.fromCharCode(c);}return s;};
+  const ifd=o=>{const n=u16(o),out={};for(let i=0;i<n;i++){const e=o+2+i*12,tag=u16(e),type=u16(e+2),cnt=u32(e+4);
+    if(type===2) out[tag]=ascii(cnt>4?u32(e+8):e+8,cnt);
+    else if(type===4) out[tag]=u32(e+8);
+    else if(type===3) out[tag]=u16(e+8);}return out;};
+  const i0=ifd(u32(4));
+  let dt=null;
+  if (i0[0x8769]){const ex=ifd(i0[0x8769]); dt=ex[0x9003]||ex[0x9004];}
+  dt=dt||i0[0x0132];
+  const m=dt&&dt.match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/);
+  if(!m) return null;
+  const d=new Date(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6]);
+  return isNaN(d)?null:d;
+}
+
+/* ======================= 影像品質 ======================= */
+function imageStats(src){
+  const W=400, H=Math.max(1,Math.round(src.height*W/src.width));
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(src,0,0,W,H);
+  const d=x.getImageData(0,0,W,H).data, g=new Float32Array(W*H);
+  let sum=0;
+  for(let i=0,j=0;i<d.length;i+=4,j++){g[j]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];sum+=g[j];}
+  let n=0,m=0,s2=0;
+  for(let y=1;y<H-1;y++)for(let xx=1;xx<W-1;xx++){
+    const i=y*W+xx, l=g[i-1]+g[i+1]+g[i-W]+g[i+W]-4*g[i];
+    n++; m+=l; s2+=l*l;
+  }
+  m/=n;
+  return {brightness:sum/(W*H), sharpness:s2/n-m*m};
+}
+
+/* ======================= 模型 ======================= */
+let modelsPromise=null;
+function ensureModels(showStatus=true){
+  if (showStatus && !modelsReady) setBusy('正在載入偵測模型…<br><small>第一次使用需下載數 MB，請稍候</small>');
+  if (!modelsPromise) modelsPromise=loadModels().then(m=>{modelsReady=true;return m;}).catch(e=>{modelsPromise=null;throw e;});
+  return modelsPromise;
+}
+let modelsReady=false;
+async function loadModels(){
+  const vision=await import(CONFIG.bundleUrl);
+  const files=await vision.FilesetResolver.forVisionTasks(CONFIG.wasmBase);
+  const [pose,face]=await Promise.all([
+    vision.PoseLandmarker.createFromOptions(files,{
+      baseOptions:{modelAssetPath:CONFIG.poseModel, delegate:'CPU'},
+      runningMode:'IMAGE', numPoses:2
+    }),
+    vision.FaceLandmarker.createFromOptions(files,{
+      baseOptions:{modelAssetPath:CONFIG.faceModel, delegate:'CPU'},
+      runningMode:'IMAGE', numFaces:2
+    })
+  ]);
+  return {pose,face};
+}
+
+/* ======================= 偵測 ======================= */
+async function detect(){
+  const W=S.src.width, H=S.src.height;
+  const warns=[...S.baseWarnings];
+  let poseRes, faceRes;
+  try{
+    const m=await ensureModels();
+    setBusy('正在偵測點位…');
+    await new Promise(r=>setTimeout(r,30));
+    poseRes=m.pose.detect(S.src);
+    faceRes=m.face.detect(S.src);
+  }catch(e){
+    console.error(e);
+    warns.push({level:'err',text:'偵測模型無法載入（請確認網路連線）。已放上預設點位，請手動校正。'});
+    applyPoints(defaultPoints(W,H),'default');
+    finishDetect(warns); return;
+  }
+
+  const poses=poseRes.landmarks||[], faces=faceRes.faceLandmarks||[];
+  if (poses.length>1 || faces.length>1) warns.push({level:'warn',text:'畫面中偵測到 2 人以上，請確認所有點位都在孩童身上。'});
+
+  // 選擇孩童：雙肩中點最接近畫面水平中央者
+  let pose=null;
+  if (poses.length){
+    pose=poses.slice().sort((a,b)=>Math.abs((a[11].x+a[12].x)/2-.5)-Math.abs((b[11].x+b[12].x)/2-.5))[0];
+  }
+  let face=null;
+  if (faces.length){
+    const ref = pose ? pose[0] : {x:.5,y:.4};
+    face=faces.slice().sort((a,b)=>Math.hypot(a[1].x-ref.x,a[1].y-ref.y)-Math.hypot(b[1].x-ref.x,b[1].y-ref.y))[0];
+  }
+  const px=l=>({x:l.x*W,y:l.y*H});
+  const pts={}, src={};
+
+  // 眼睛與鼻尖：優先使用臉部模型
+  if (face){
+    const hasIris=face.length>=478;
+    const e1=hasIris?px(face[468]):mid(px(face[33]),px(face[133]));
+    const e2=hasIris?px(face[473]):mid(px(face[362]),px(face[263]));
+    const [a,b]=e1.x<e2.x?[e1,e2]:[e2,e1];
+    pts.eyeR=a; pts.eyeL=b; pts.nose=px(face[1]);
+    src.eyeR=src.eyeL=src.nose='auto';
+    // 轉頭估計
+    const c1=px(face[234]).x, c2=px(face[454]).x, lo=Math.min(c1,c2), hi=Math.max(c1,c2);
+    if (hi-lo>1){
+      const r=(pts.nose.x-lo)/(hi-lo)-.5;
+      if (Math.abs(r)>CONFIG.maxYawRatio){
+        const yaw=Math.asin(Math.min(1,Math.abs(r)*2))*DEG;
+        warns.push({level:'warn',text:`臉部轉向過大（估計約 ${yaw.toFixed(0)}°），轉頭會影響中線位置，建議重拍。`});
+      }
+    }
+  } else if (pose){
+    const e1=px(pose[2]), e2=px(pose[5]);
+    const [a,b]=e1.x<e2.x?[e1,e2]:[e2,e1];
+    pts.eyeR=a; pts.eyeL=b; pts.nose=px(pose[0]);
+    src.eyeR=src.eyeL=src.nose='auto';
+    warns.push({level:'warn',text:'未偵測到清楚的臉部，眼睛位置精度較低，請確認眼睛點位。'});
+  }
+
+  if (pose){
+    const s1=pose[11], s2=pose[12];
+    const [r,l]=s1.x<s2.x?[s1,s2]:[s2,s1];
+    pts.shR=px(r); pts.shL=px(l); src.shR=src.shL='auto';
+    const low=[];
+    if ((r.visibility??1)<CONFIG.minShoulderVisibility) low.push('右肩');
+    if ((l.visibility??1)<CONFIG.minShoulderVisibility) low.push('左肩');
+    if (low.length) warns.push({level:'warn',text:`${low.join('、')}偵測信心偏低（可能被衣物、頭髮或手遮住），請確認肩點位置。`});
+    if ([r,l].some(q=>q.x<0||q.x>1||q.y<0||q.y>1)) warns.push({level:'err',text:'肩膀可能超出畫面，請重拍並讓畫面包含雙肩。'});
+    if (Math.abs(l.x-r.x)<CONFIG.minShoulderWidthRatio) warns.push({level:'warn',text:'孩童在畫面中偏小，建議靠近一些重拍。'});
+  }
+
+  if (!pose && !face){
+    warns.push({level:'err',text:'未偵測到人物。請依拍攝說明重拍，或手動拖曳預設點位。'});
+    applyPoints(defaultPoints(W,H),'default');
+    finishDetect(warns); return;
+  }
+  if (!pose){
+    // 依臉部大小推估肩點位置
+    const fw=Math.abs(pts.eyeL.x-pts.eyeR.x)*2.6;
+    const em=mid(pts.eyeR,pts.eyeL);
+    pts.shR={x:em.x-fw*1.2,y:em.y+fw*1.9}; pts.shL={x:em.x+fw*1.2,y:em.y+fw*1.9};
+    src.shR=src.shL='default';
+    warns.push({level:'err',text:'未偵測到肩膀，肩點為預設位置，必須手動校正。'});
+  }
+  pts.neck=mid(pts.shR,pts.shL); src.neck='auto';
+  S.pts=pts; S.ptSrc=src; S.neckFollow=true;
+  finishDetect(warns);
+}
+
+function defaultPoints(W,H){
+  const s=Math.min(W,H);
+  const cx=W/2, ey=H*0.35;
+  const p={eyeR:{x:cx-s*.07,y:ey},eyeL:{x:cx+s*.07,y:ey},nose:{x:cx,y:ey+s*.07},
+    shR:{x:cx-s*.25,y:H*.68},shL:{x:cx+s*.25,y:H*.68}};
+  p.neck=mid(p.shR,p.shL);
+  return p;
+}
+function applyPoints(p,kind){
+  S.pts=p; S.ptSrc={}; KEYS.forEach(k=>S.ptSrc[k]=kind); S.neckFollow=true;
+}
+function finishDetect(warns){
+  S.warnings=warns;
+  hideBusy();
+  renderQuality();
+  buildChips();
+  fitView(); render(); updateResult();
+  setStep(S.warnings.length?2:3);
+}
+
+/* ======================= 載入影像 ======================= */
+function toSourceCanvas(img,w,h){
+  const k=Math.min(1,CONFIG.maxSourceSide/Math.max(w,h));
+  const c=document.createElement('canvas');
+  c.width=Math.round(w*k); c.height=Math.round(h*k);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c;
+}
+async function loadFile(file){
+  showWork();
+  setBusy('讀取照片…');
+  const url=URL.createObjectURL(file);
+  try{
+    const img=new Image();
+    img.src=url;
+    await img.decode();
+    S.src=toSourceCanvas(img,img.naturalWidth,img.naturalHeight);
+  }catch(e){
+    hideBusy(); URL.revokeObjectURL(url);
+    resetToStart();
+    alert('無法讀取此圖片格式（例如部分 HEIC 檔）。請改用 JPG／PNG，或使用「開啟相機拍攝」。');
+    return;
+  }
+  URL.revokeObjectURL(url);
+  const exif=await readExifDate(file);
+  if (exif) S.shot={date:exif,source:'照片 EXIF 拍攝時間'};
+  else S.shot={date:new Date(file.lastModified||Date.now()),source:'檔案時間（非確定的拍攝時間，請確認）'};
+  S.fileBase=(file.name||'photo').replace(/\.[^.]+$/,'');
+  startAnalysis([]);
+}
+function startAnalysis(extraWarns){
+  const st=imageStats(S.src), w=[...extraWarns];
+  if (st.sharpness<CONFIG.minSharpness) w.push({level:'warn',text:'照片可能模糊（晃動或失焦），建議重拍。'});
+  if (st.brightness<CONFIG.minBrightness) w.push({level:'warn',text:'照片偏暗，建議在光線充足處重拍。'});
+  if (st.brightness>CONFIG.maxBrightness) w.push({level:'warn',text:'照片過亮，建議避免強光或逆光後重拍。'});
+  S.baseWarnings=w;
+  S.editing=false; S.selected=null; syncEditUI();
+  fitView(); render();
+  detect();
+}
+
+/* ======================= 繪圖 ======================= */
+function fitView(){
+  if (!S.src) return;
+  const stage=$('stage');
+  const cw=stage.clientWidth||320;
+  const maxH=Math.max(260,window.innerHeight*0.72);
+  const k=Math.min(cw/S.src.width,maxH/S.src.height);
+  const w=Math.round(S.src.width*k), h=Math.round(S.src.height*k);
+  const dpr=window.devicePixelRatio||1;
+  view.style.width=w+'px'; view.style.height=h+'px';
+  view.width=Math.round(w*dpr); view.height=Math.round(h*dpr);
+  S.view={k, dpr};
+}
+function strokeLine(ctx,a,b,color,lw,dash){
+  ctx.save();
+  ctx.lineCap='round';
+  if (dash) ctx.setLineDash(dash);
+  ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.lineWidth=lw*2.2;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  ctx.strokeStyle=color; ctx.lineWidth=lw;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  ctx.restore();
+}
+function tagText(ctx,text,x,y,fs,color){
+  ctx.save();
+  ctx.font=`600 ${fs}px ${getComputedStyle(document.body).fontFamily}`;
+  const w=ctx.measureText(text).width, pad=fs*.35;
+  ctx.fillStyle='rgba(15,22,21,.72)';
+  roundRect(ctx,x-w/2-pad,y-fs*.75-pad,w+pad*2,fs*1.5+pad*.4,fs*.35); ctx.fill();
+  ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(text,x,y);
+  ctx.restore();
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+/* k: 原圖像素 → 目標畫布像素；u: 基本單位（目標像素） */
+function drawScene(ctx,k,u,opt={}){
+  const p=S.pts; if(!p) return;
+  const P=q=>({x:q.x*k,y:q.y*k});
+  const lw=u*1.3;
+  const r=measure(p);
+  // 肩線（延長）
+  const a=P(p.shR), b=P(p.shL), d=sub(b,a);
+  strokeLine(ctx,sub(a,mul(d,.25)),add(b,mul(d,.25)),COLORS.shoulder,lw);
+  // 兩眼連線（細虛線，標示中點）
+  strokeLine(ctx,P(p.eyeR),P(p.eyeL),COLORS.mid,lw*.45,[u*2,u*2]);
+  if (r.ok){
+    const X=P(r.X), E=P(r.eyeMid);
+    const top=add(E,mul(sub(E,X),.3));
+    strokeLine(ctx,top,X,COLORS.mid,lw);
+    // 夾角弧
+    const dm=norm(sub(E,X));
+    const ds=r.side==='right'?mul(r.u,-1):r.u;
+    const R=Math.min(len(sub(E,X))*.4,u*26);
+    const aS=Math.atan2(ds.y,ds.x), aM=Math.atan2(dm.y,dm.x);
+    let diff=aM-aS; while(diff>Math.PI)diff-=2*Math.PI; while(diff<-Math.PI)diff+=2*Math.PI;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(X.x,X.y); ctx.arc(X.x,X.y,R,aS,aS+diff,diff<0); ctx.closePath();
+    ctx.fillStyle='rgba(255,79,139,.28)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(X.x,X.y,R,aS,aS+diff,diff<0);
+    ctx.strokeStyle=COLORS.arc; ctx.lineWidth=lw*.9; ctx.stroke();
+    ctx.restore();
+    const bis=aS+diff/2;
+    tagText(ctx,`${r.acute.toFixed(1)}°`,X.x+Math.cos(bis)*R*1.55,X.y+Math.sin(bis)*R*1.55,u*7,'#FFD0E0');
+    // 交點
+    ctx.save(); ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=u*.6;
+    ctx.beginPath(); ctx.arc(X.x,X.y,u*1.8,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
+    // 眼中點
+    ctx.save(); ctx.fillStyle=COLORS.mid; ctx.strokeStyle='#000'; ctx.lineWidth=u*.5;
+    ctx.beginPath(); ctx.arc(E.x,E.y,u*1.6,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.restore();
+  }
+  // 點位
+  for (const key of KEYS){
+    const q=P(p[key]), info=POINTS[key];
+    const sel=opt.selected===key;
+    const rad=u*(sel?4.2:3.2);
+    ctx.save();
+    ctx.lineWidth=u*(sel?1.2:.9);
+    ctx.strokeStyle=sel?'#fff':'#000';
+    ctx.fillStyle=key==='nose'?'rgba(0,0,0,.25)':info.color;
+    ctx.beginPath(); ctx.arc(q.x,q.y,rad,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    if (key==='nose'){ctx.strokeStyle=COLORS.nose;ctx.lineWidth=u*.7;ctx.stroke();}
+    if (S.ptSrc[key]==='default'){ctx.setLineDash([u,u]);ctx.strokeStyle='#FF4F4F';ctx.lineWidth=u*.9;
+      ctx.beginPath();ctx.arc(q.x,q.y,rad+u*2,0,Math.PI*2);ctx.stroke();}
+    ctx.restore();
+    if (opt.labels && (key==='shR'||key==='shL')) tagText(ctx,info.label,q.x,q.y+u*9,u*5.2,'#FFE2A8');
+    if (opt.labels && sel && key!=='shR' && key!=='shL') tagText(ctx,info.label,q.x,q.y-u*9,u*5.2,'#fff');
+  }
+}
+function render(){
+  if (!S.src) return;
+  const {k,dpr}=S.view;
+  vctx.setTransform(1,0,0,1,0,0);
+  vctx.clearRect(0,0,view.width,view.height);
+  vctx.drawImage(S.src,0,0,view.width,view.height);
+  if (S.pts){
+    vctx.setTransform(dpr,0,0,dpr,0,0);
+    drawScene(vctx,k,2,{selected:S.selected,labels:true});
+    if (S.drag) drawLoupe();
+  }
+}
+function drawLoupe(){
+  const {k,dpr}=S.view, key=S.drag.key, q=S.pts[key];
+  const cssW=view.width/dpr, R=Math.min(70,cssW*.18), zoom=3;
+  const left = q.x*k > cssW/2;
+  const cx = left ? R+8 : cssW-R-8, cy=R+8;
+  const srcR=R/(k*zoom);
+  vctx.save();
+  vctx.beginPath(); vctx.arc(cx,cy,R,0,Math.PI*2); vctx.clip();
+  vctx.fillStyle='#000'; vctx.fillRect(cx-R,cy-R,R*2,R*2);
+  vctx.drawImage(S.src,q.x-srcR,q.y-srcR,srcR*2,srcR*2,cx-R,cy-R,R*2,R*2);
+  // 在放大鏡中畫其他點與線的局部
+  vctx.translate(cx-q.x*k*zoom,cy-q.y*k*zoom);
+  drawScene(vctx,k*zoom,2,{selected:key});
+  vctx.restore();
+  vctx.save();
+  vctx.strokeStyle='#fff'; vctx.lineWidth=2;
+  vctx.beginPath(); vctx.arc(cx,cy,R,0,Math.PI*2); vctx.stroke();
+  vctx.strokeStyle='rgba(255,255,255,.8)'; vctx.lineWidth=1;
+  vctx.beginPath(); vctx.moveTo(cx-R,cy); vctx.lineTo(cx+R,cy); vctx.moveTo(cx,cy-R); vctx.lineTo(cx,cy+R); vctx.stroke();
+  vctx.restore();
+}
+
+/* ======================= 結果 ======================= */
+function updateResult(){
+  const r=S.pts?measure(S.pts):{ok:false};
+  const exportBtn=$('btnExport');
+  if (!r.ok){
+    $('angleText').innerHTML='--<small>°</small>';
+    $('sideText').textContent=r.reason||'—';
+    $('protractor').innerHTML='';
+    exportBtn.disabled=true;
+    return;
+  }
+  exportBtn.disabled=false;
+  $('angleText').innerHTML=`${r.acute.toFixed(1)}<small>°</small>`;
+  $('sideText').innerHTML=`<b>${SIDE_TEXT[r.side]}</b>　偏離垂直 ${Math.abs(r.delta).toFixed(1)}°`;
+  // 小量角器：底線為肩線，斜線為中線
+  const cx=60, cy=66, L=58;
+  const dx = r.side==='right'?-1:1;
+  const ang=(90-Math.abs(r.delta))/DEG;
+  const ex=cx+Math.cos(ang)*L*dx, ey=cy-Math.sin(ang)*L;
+  const ar=26, ax=cx+Math.cos(ang)*ar*dx, ay=cy-Math.sin(ang)*ar;
+  const sweep = dx>0 ? 0 : 1;
+  $('protractor').innerHTML=`
+    <line x1="4" y1="${cy}" x2="116" y2="${cy}" stroke="${COLORS.shoulder}" stroke-width="4" stroke-linecap="round"/>
+    <line x1="${cx}" y1="${cy}" x2="${cx}" y2="4" stroke="#C9D2CF" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <path d="M${cx},${cy} L${cx+ar*dx},${cy} A${ar},${ar} 0 0 ${sweep} ${ax},${ay} Z" fill="rgba(255,79,139,.3)" stroke="${COLORS.arc}" stroke-width="2"/>
+    <line x1="${cx}" y1="${cy}" x2="${ex}" y2="${ey}" stroke="#139DBB" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="${cx}" cy="${cy}" r="3.5" fill="#1D2B2A"/>`;
+}
+
+/* ======================= 品質提示 ======================= */
+function renderQuality(){
+  const box=$('qualityBox');
+  const w=S.warnings;
+  if (!w.length){box.innerHTML='';return;}
+  const hasErr=w.some(x=>x.level==='err');
+  box.innerHTML=`<div class="notice ${hasErr?'err':'warn'}" role="alert">
+    <strong>${hasErr?'這張照片不適合量測':'這張照片可能影響量測準確度'}</strong>
+    <ul>${w.map(x=>`<li>${escapeHtml(x.text)}</li>`).join('')}</ul>
+    <div class="row">
+      <button class="btn primary" type="button" data-act="retake">重新拍攝／選擇照片</button>
+      <button class="btn" type="button" data-act="accept">仍使用這張照片</button>
+    </div></div>`;
+  box.querySelector('[data-act=retake]').onclick=resetToStart;
+  box.querySelector('[data-act=accept]').onclick=()=>{
+    box.innerHTML=`<details class="notice warn"><summary>品質提示 ${w.length} 項（會記錄在匯出圖片上）</summary>
+      <ul>${w.map(x=>`<li>${escapeHtml(x.text)}</li>`).join('')}</ul></details>`;
+    setStep(3);
+  };
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+/* ======================= 手動校正 ======================= */
+function buildChips(){
+  const box=$('chips'); box.innerHTML='';
+  for (const key of KEYS){
+    const b=document.createElement('button');
+    b.type='button'; b.className='chip'; b.dataset.key=key;
+    b.setAttribute('aria-pressed', String(S.selected===key));
+    const st=S.ptSrc[key];
+    const tag = st==='manual'?'已校正':st==='default'?'需校正':'';
+    b.innerHTML=`<span class="dot" style="background:${POINTS[key].color};border:1px solid #333"></span>${POINTS[key].label}${tag?`<span class="tag">${tag}</span>`:''}`;
+    b.onclick=()=>{S.selected=key; buildChips(); render();};
+    box.appendChild(b);
+  }
+}
+function syncEditUI(){
+  $('stage').classList.toggle('editing',S.editing);
+  $('editPanel').classList.toggle('editing-on',S.editing);
+  $('btnEdit').setAttribute('aria-pressed',String(S.editing));
+  $('btnEdit').textContent=S.editing?'完成校正':'手動校正點位';
+  $('editHint').textContent=S.editing
+    ?'拖曳照片上的圓點到正確位置；拖曳時左上或右上會出現放大鏡。也可先選點位再用方向鍵微調。'
+    :'若線條位置正確，可直接看下方角度。需要調整時，按「手動校正點位」後拖曳圓點。';
+}
+function markManual(key){
+  S.ptSrc[key]='manual';
+  if (key==='neck') S.neckFollow=false;
+  if ((key==='shR'||key==='shL') && S.neckFollow) S.pts.neck=mid(S.pts.shR,S.pts.shL);
+}
+function evtToSrc(e){
+  const rect=view.getBoundingClientRect(), k=S.view.k;
+  return {x:(e.clientX-rect.left)/k, y:(e.clientY-rect.top)/k};
+}
+view.addEventListener('pointerdown',e=>{
+  if (!S.editing || !S.pts) return;
+  const p=evtToSrc(e), k=S.view.k;
+  const hitR=(e.pointerType==='touch'?30:16)/k;
+  let best=null, bd=Infinity;
+  for (const key of KEYS){const d=len(sub(S.pts[key],p)); if(d<bd){bd=d;best=key;}}
+  if (bd>hitR) return;
+  e.preventDefault();
+  view.setPointerCapture(e.pointerId);
+  S.drag={key:best,id:e.pointerId,off:sub(S.pts[best],p)};
+  S.selected=best; buildChips(); render();
+});
+view.addEventListener('pointermove',e=>{
+  if (!S.drag || e.pointerId!==S.drag.id) return;
+  e.preventDefault();
+  const p=add(evtToSrc(e),S.drag.off);
+  p.x=Math.max(0,Math.min(S.src.width,p.x)); p.y=Math.max(0,Math.min(S.src.height,p.y));
+  S.pts[S.drag.key]=p; markManual(S.drag.key);
+  render(); updateResult();
+});
+const endDrag=e=>{ if(S.drag && e.pointerId===S.drag.id){S.drag=null; buildChips(); render();} };
+view.addEventListener('pointerup',endDrag);
+view.addEventListener('pointercancel',endDrag);
+
+$('nudge').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b||!S.selected||!S.pts) return;
+  const step=Math.max(1,Math.round(Math.max(S.src.width,S.src.height)/800));
+  const q=S.pts[S.selected];
+  S.pts[S.selected]={x:q.x+(+b.dataset.dx)*step,y:q.y+(+b.dataset.dy)*step};
+  markManual(S.selected); buildChips(); render(); updateResult();
+});
+$('btnEdit').onclick=()=>{S.editing=!S.editing; if(!S.editing){S.selected=null;buildChips();} else setStep(3); syncEditUI(); render();};
+$('btnNeckReset').onclick=()=>{ if(!S.pts)return; S.neckFollow=true; S.pts.neck=mid(S.pts.shR,S.pts.shL); S.ptSrc.neck='auto'; buildChips(); render(); updateResult(); };
+$('btnRedetect').onclick=()=>{ if(!S.src)return; S.selected=null; setBusy('正在偵測點位…'); detect(); };
+
+/* ======================= 匯出 ======================= */
+function pad2(n){return String(n).padStart(2,'0');}
+function fmtDateTime(d){return `${d.getFullYear()}/${pad2(d.getMonth()+1)}/${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;}
+function toLocalInput(d){return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;}
+const NO_START='，、。；：）」』！？,.;:)%°';
+function wrapText(ctx,text,maxW){
+  const out=[];
+  for (const para of String(text).split('\n')){
+    let line='';
+    for (const ch of para){
+      if (line && ctx.measureText(line+ch).width>maxW){
+        if (NO_START.includes(ch)){ // 標點不放行首：與前一字一起換行
+          const last=line.slice(-1); out.push(line.slice(0,-1)); line=last+ch;
+        } else { out.push(line); line=ch.trim()?ch:''; }
+      } else line+=ch;
+    }
+    out.push(line);
+  }
+  return out;
+}
+function pointSummary(){
+  const man=KEYS.filter(k=>S.ptSrc[k]==='manual').map(k=>POINTS[k].label);
+  const def=KEYS.filter(k=>S.ptSrc[k]==='default').map(k=>POINTS[k].label);
+  const parts=[];
+  if (man.length) parts.push(`手動校正：${man.join('、')}`);
+  else parts.push(def.length?'未手動校正':'全部自動偵測，未手動校正');
+  if (def.length) parts.push(`預設位置未校正：${def.join('、')}`);
+  parts.push(S.neckFollow?'頸點＝雙肩中點':'頸點為手動指定');
+  return parts.join('；');
+}
+
+function buildExport(info){
+  const r=measure(S.pts);
+  const k=Math.min(1,CONFIG.maxExportSide/Math.max(S.src.width,S.src.height));
+  const W=Math.round(S.src.width*k), IH=Math.round(S.src.height*k);
+  const u=Math.max(W,IH)/260;
+  const fam=getComputedStyle(document.body).fontFamily;
+  const fs=Math.max(22,Math.round(W/34));
+  const padX=Math.round(W*.045);
+
+  const rows=[];
+  if (info.name) rows.push(['姓名',info.name]);
+  if (info.birth){ rows.push(['出生日期',`${info.birth.getFullYear()}/${pad2(info.birth.getMonth()+1)}/${pad2(info.birth.getDate())}`]);
+                   rows.push(['拍攝時年齡',info.age]); }
+  rows.push(['拍攝時間',`${fmtDateTime(info.shot)}\n（來源：${info.shotSource}）`]);
+  rows.push(['偏向',`${SIDE_TEXT[r.side]}，中線偏離垂直 ${Math.abs(r.delta).toFixed(1)}°`]);
+  rows.push(['點位',pointSummary()]);
+  if (S.warnings.length) rows.push(['品質提示',S.warnings.map(w=>'・'+w.text).join('\n')]);
+  rows.push(['量測定義','夾角＝雙肩連線與頭部中線（兩眼中點—頸點）所夾、小於 90° 的一側；左右以孩童本人為準。']);
+
+  const m=document.createElement('canvas').getContext('2d');
+  const labelW=fs*5.2, valW=W-padX*2-labelW;
+  m.font=`${fs}px ${fam}`;
+  const lh=fs*1.5;
+  const rowLines=rows.map(([l,v])=>wrapText(m,v,valW));
+  const disclaimer='本圖片由「斜頸角度紀錄」輔助紀錄工具產生，數值受拍攝條件與自動偵測準確度影響，不具醫療診斷效力，不可作為治療決策之唯一依據。';
+  m.font=`${fs*.78}px ${fam}`;
+  const discLines=wrapText(m,disclaimer,W-padX*2);
+  const headH=fs*4.6;
+  const bodyH=rowLines.reduce((s,ls)=>s+ls.length*lh+fs*.5,0);
+  const footH=discLines.length*fs*1.25+fs*2.6;
+  const PH=Math.ceil(padX*.8+headH+bodyH+footH);
+
+  const c=document.createElement('canvas'); c.width=W; c.height=IH+PH;
+  const x=c.getContext('2d');
+  x.drawImage(S.src,0,0,W,IH);
+  drawScene(x,k,u,{labels:true});
+
+  // 資訊區
+  x.fillStyle='#FFFFFF'; x.fillRect(0,IH,W,PH);
+  x.fillStyle='#1F6F63'; x.fillRect(0,IH,W,Math.max(4,fs*.22));
+  let y=IH+padX*.8;
+  x.textBaseline='top';
+  x.fillStyle='#5E6E6B'; x.font=`${fs*.95}px ${fam}`;
+  x.fillText('雙肩連線與頭部中線夾角',padX,y);
+  x.fillStyle='#1D2B2A'; x.font=`300 ${fs*2.9}px ${fam}`;
+  const angleStr=`${r.acute.toFixed(1)}°`;
+  x.fillText(angleStr,padX,y+fs*1.35);
+  const aw=x.measureText(angleStr).width;
+  x.font=`600 ${fs*1.15}px ${fam}`; x.fillStyle='#1F6F63';
+  x.fillText(SIDE_TEXT[r.side],padX+aw+fs*.9,y+fs*2.55);
+  y+=headH;
+
+  rows.forEach(([l],i)=>{
+    x.font=`${fs*.9}px ${fam}`; x.fillStyle='#5E6E6B';
+    x.fillText(l,padX,y+fs*.05);
+    x.font=`${fs}px ${fam}`; x.fillStyle=l==='品質提示'?'#8A4B00':'#1D2B2A';
+    rowLines[i].forEach((ln,j)=>x.fillText(ln,padX+labelW,y+j*lh));
+    y+=rowLines[i].length*lh+fs*.5;
+  });
+  y+=fs*.6;
+  x.strokeStyle='#D3DBD8'; x.lineWidth=Math.max(1,fs*.05);
+  x.beginPath(); x.moveTo(padX,y); x.lineTo(W-padX,y); x.stroke();
+  y+=fs*.6;
+  x.font=`${fs*.78}px ${fam}`; x.fillStyle='#5E6E6B';
+  discLines.forEach((ln,j)=>x.fillText(ln,padX,y+j*fs*1.25));
+  y+=discLines.length*fs*1.25+fs*.3;
+  x.fillText(`匯出時間 ${fmtDateTime(new Date())}・版本 ${APP_VERSION}`,padX,y);
+  return c;
+}
+
+function openExport(){
+  $('formErr').textContent='';
+  $('inShot').value=toLocalInput(S.shot.date||new Date());
+  $('timeSrcText').textContent=`（${S.shot.source}）`;
+  $('dlgExport').showModal();
+}
+async function makeExport(skip){
+  const err=$('formErr'); err.textContent='';
+  const shotVal=$('inShot').value;
+  const shot=shotVal?new Date(shotVal):null;
+  if (!shot||isNaN(shot)){err.textContent='請填寫拍攝日期時間。';return;}
+  const shotChanged = S.shot.date && Math.abs(shot-S.shot.date)>=1000;
+  const shotSource = shotChanged?'使用者輸入':S.shot.source;
+  let name='', birth=null, age='';
+  if (!skip){
+    name=$('inName').value.trim();
+    const bv=$('inBirth').value;
+    if (bv){
+      const [yy,mm,dd]=bv.split('-').map(Number);
+      birth=new Date(yy,mm-1,dd);
+      age=ageString(birth,shot);
+      if (age===null){err.textContent='出生日期晚於拍攝日期，請確認。';return;}
+    }
+  }
+  const btn=$('btnMake'); btn.disabled=true;
+  try{
+    const canvas=buildExport({name,birth,age,shot,shotSource});
+    const blob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.92));
+    if(!blob) throw new Error('toBlob failed');
+    const stamp=`${shot.getFullYear()}${pad2(shot.getMonth()+1)}${pad2(shot.getDate())}_${pad2(shot.getHours())}${pad2(shot.getMinutes())}`;
+    const safeName=(name||'').replace(/[\\/:*?"<>|\s]+/g,'_');
+    const fileName=`斜頸角度_${safeName?safeName+'_':''}${stamp}.jpg`;
+    if (S.export?.url) URL.revokeObjectURL(S.export.url);
+    S.export={blob,fileName,url:URL.createObjectURL(blob)};
+    $('previewImg').src=S.export.url;
+    $('dlgExport').close();
+    const canShare=!!(navigator.canShare && navigator.canShare({files:[new File([blob],fileName,{type:'image/jpeg'})]}));
+    $('btnShare').classList.toggle('hidden',!canShare);
+    $('saveHint').textContent=canShare
+      ?'iPhone：按「儲存到相簿／分享」後選「儲存影像」。Android：可分享到相簿或雲端，或按「下載檔案」存到「下載」資料夾。'
+      :'按「下載檔案」儲存。手機上也可長按預覽圖片儲存。';
+    $('dlgPreview').showModal();
+    setStep(4,true);
+  }catch(e){
+    console.error(e); err.textContent='產生圖片失敗，請再試一次。';
+  }finally{ btn.disabled=false; }
+}
+$('btnExport').onclick=openExport;
+$('btnMake').onclick=()=>makeExport(false);
+$('btnSkip').onclick=()=>makeExport(true);
+$('btnShare').onclick=async()=>{
+  if(!S.export) return;
+  const file=new File([S.export.blob],S.export.fileName,{type:'image/jpeg'});
+  try{ await navigator.share({files:[file],title:S.export.fileName}); }
+  catch(e){ if(e.name!=='AbortError') alert('無法開啟分享，請改用「下載檔案」。'); }
+};
+$('btnDownload').onclick=()=>{
+  if(!S.export) return;
+  const a=document.createElement('a'); a.href=S.export.url; a.download=S.export.fileName;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+/* ======================= 相機 ======================= */
+let stream=null, tilt={pitch:null,roll:null};
+function onMotion(e){
+  const g=e.accelerationIncludingGravity; if(!g||g.x==null) return;
+  const ax=Math.abs(g.x), ay=Math.abs(g.y), az=Math.abs(g.z);
+  const major=Math.max(ax,ay), minor=Math.min(ax,ay);
+  const lv=$('level');
+  if (major<3){ tilt={pitch:null,roll:null}; lv.textContent='請將手機直立'; lv.className='level bad'; return; }
+  tilt.roll=Math.atan(minor/major)*DEG;
+  tilt.pitch=Math.atan(az/major)*DEG;
+  const ok=tilt.pitch<=CONFIG.maxPhonePitch && tilt.roll<=CONFIG.maxPhoneRoll;
+  lv.textContent=`前後傾斜 ${tilt.pitch.toFixed(0)}°｜左右傾斜 ${tilt.roll.toFixed(0)}°`;
+  lv.className='level '+(ok?'ok':'bad');
+}
+async function openCamera(){
+  // iOS：需在點擊當下請求動作感測器權限
+  try{
+    if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      DeviceMotionEvent.requestPermission().then(s=>{ if(s==='granted') window.addEventListener('devicemotion',onMotion); }).catch(()=>{});
+    } else window.addEventListener('devicemotion',onMotion);
+  }catch(e){}
+  if (!navigator.mediaDevices?.getUserMedia || location.protocol==='file:'){
+    $('fileCapture').click(); return;
+  }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1920}}});
+  }catch(e){
+    console.warn(e);
+    alert('無法開啟 APP 內相機（可能未允許相機權限），將改用手機內建相機。');
+    $('fileCapture').click(); return;
+  }
+  const v=$('video'); v.srcObject=stream;
+  $('level').textContent='傾斜偵測中…'; $('level').className='level';
+  $('cam').classList.add('show');
+  try{ await v.play(); }catch(e){}
+}
+function closeCamera(){
+  window.removeEventListener('devicemotion',onMotion);
+  if (stream){stream.getTracks().forEach(t=>t.stop()); stream=null;}
+  $('cam').classList.remove('show');
+}
+$('shutter').onclick=()=>{
+  const v=$('video');
+  if (!v.videoWidth){return;}
+  const extra=[];
+  if (tilt.pitch!=null && tilt.pitch>CONFIG.maxPhonePitch) extra.push({level:'warn',text:`拍攝時手機前後傾斜約 ${tilt.pitch.toFixed(0)}°，可能影響量測，建議手機直立重拍。`});
+  S.src=toSourceCanvas(v,v.videoWidth,v.videoHeight);
+  S.shot={date:new Date(),source:'APP 拍攝時間'};
+  S.fileBase='camera';
+  closeCamera();
+  showWork();
+  startAnalysis(extra);
+};
+$('camCancel').onclick=closeCamera;
+$('camGuide').onclick=()=>$('dlgGuide').showModal();
+
+/* ======================= 流程 / UI ======================= */
+function setStep(n,allDone){
+  document.querySelectorAll('#steps li').forEach(li=>{
+    const s=+li.dataset.step;
+    li.classList.toggle('on',s===n);
+    li.classList.toggle('done',s<n || (allDone&&s<=n));
+  });
+}
+function setBusy(html){$('busyText').innerHTML=html; $('busy').classList.add('show');}
+function hideBusy(){$('busy').classList.remove('show');}
+function showWork(){
+  $('startPanel').classList.add('hidden');
+  $('workArea').classList.remove('hidden');
+  $('qualityBox').innerHTML='';
+  $('btnExport').disabled=true;
+  setStep(2);
+}
+function resetToStart(){
+  S.src=null; S.pts=null; S.warnings=[]; S.editing=false; S.selected=null;
+  $('workArea').classList.add('hidden');
+  $('startPanel').classList.remove('hidden');
+  $('fileUpload').value=''; $('fileCapture').value='';
+  syncEditUI(); setStep(1);
+  window.scrollTo({top:0});
+}
+$('btnCamera').onclick=openCamera;
+$('btnUpload').onclick=()=>$('fileUpload').click();
+$('fileUpload').onchange=e=>{const f=e.target.files[0]; if(f) loadFile(f);};
+$('fileCapture').onchange=e=>{const f=e.target.files[0]; if(f) loadFile(f);};
+$('btnRestart').onclick=resetToStart;
+$('openGuide').onclick=()=>$('dlgGuide').showModal();
+document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>b.closest('dialog').close());
+$('btnAgree').onclick=()=>$('dlgDisclaimer').close();
+$('dlgDisclaimer').addEventListener('cancel',e=>e.preventDefault());
+let rt; window.addEventListener('resize',()=>{clearTimeout(rt); rt=setTimeout(()=>{fitView();render();},120);});
+
+setStep(1);
+$('dlgDisclaimer').showModal();
+// 背景預先載入模型，縮短第一次偵測等待時間
+setTimeout(()=>{ ensureModels(false).catch(e=>console.warn('預載模型失敗',e)); },500);
+
+// 測試用匯出
+window.__tort={measure,ageString,parseTiffDate};
+</script>
+</body>
+</html>
